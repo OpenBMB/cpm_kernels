@@ -2,7 +2,7 @@ import cpm_kernels.torch as ct
 import torch
 import unittest
 
-class TestNormalize(unittest.TestCase):
+class TestLayerNorm(unittest.TestCase):
     def test_layernorm_unbias(self):
         with torch.cuda.device(4):
             for shape, eps in [
@@ -36,10 +36,10 @@ class TestNormalize(unittest.TestCase):
                     y1.backward(gradient=rd)
                     y2.backward(gradient=rd)
                     
-                    diff_1 = (x1.grad - x2.grad).abs().max() / 128
+                    diff_1 = (x1.grad - x2.grad).abs().max()
                     diff_2 = (l1.weight.grad - l2.weight.grad).abs().max() / 512
 
-                    self.assertLess(diff_1, 1e-2)
+                    self.assertLess(diff_1, 1e-1)
                     self.assertLess(diff_2, 1e-2)
                     
                     l1.weight.grad.zero_()
@@ -79,7 +79,7 @@ class TestNormalize(unittest.TestCase):
                     y1.backward(gradient=rd)
                     y2.backward(gradient=rd)
                     
-                    diff_1 = (x1.grad - x2.grad).abs().max() / 128
+                    diff_1 = (x1.grad - x2.grad).abs().max()
                     diff_2 = (l1.weight.grad - l2.weight.grad).abs().max() / 512
                     diff_3 = (l1.bias.grad - l2.bias.grad).abs().max() / 512
 
