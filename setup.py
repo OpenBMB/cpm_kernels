@@ -1,6 +1,5 @@
 from setuptools import setup, find_packages
 from glob import glob
-import os
 
 if __name__ == "__main__":
     setup(
