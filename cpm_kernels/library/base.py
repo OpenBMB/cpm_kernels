@@ -51,6 +51,12 @@ class Lib:
         else:
             raise RuntimeError("Unknown platform: %s" % sys.platform)
 
+    @staticmethod
+    def from_lib(name, lib):
+        ret = Lib(name)
+        ret.__lib = lib
+        return ret
+
     def bind(self, name, arg_types, ret_type):
         if self.__lib is None:
             def decorator(f):

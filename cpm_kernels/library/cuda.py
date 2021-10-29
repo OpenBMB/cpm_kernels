@@ -1,8 +1,12 @@
 import ctypes
-from typing import Any, List, Tuple
+import sys
+from typing import List
 from .base import Lib
 
-cuda = Lib("cuda")
+if sys.platform.startswith("win"):
+    cuda = Lib.from_lib("cuda", ctypes.WinDLL("nvcuda.dll"))
+else:
+    cuda = Lib("cuda")
 CUresult = ctypes.c_int
 
 CUDA_SUCCESS = 0
