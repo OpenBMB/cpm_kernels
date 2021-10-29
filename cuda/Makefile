@@ -18,4 +18,4 @@ all: $(TARGETS)
 
 .PHONY : clean
 clean:
-	echo $(TARGETS)
+	rm $(TARGETS)

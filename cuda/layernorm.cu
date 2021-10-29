@@ -6,7 +6,7 @@
 CPM_KERNEL_EXPORT void cu_layernorm_forward(
     int32_t batch, int32_t n, int32_t m,
     const half *mat,    // (batch, n, m)
-    half *out,
+    half *out,          // (batch, n, m)
     float eps,
     bool rd_mean
 ) {

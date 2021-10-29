@@ -35,7 +35,7 @@ CPM_KERNEL_EXPORT void cu_embedding_forward(
 // block <batch, m / 1024>    thread<1024>
 CPM_KERNEL_EXPORT void cu_embedding_backward_stage1(
     int32_t batch, int32_t n, int32_t m,
-    const half *grad_out,           // (batch * n, m)
+    const half *grad_out,           // (batch, n, m)
     const int32_t *argsort_ids,     // (batch, n)
     const int32_t *sorted_ids,      // (batch, n)
     half *grad,                     // (vocab_size, m)

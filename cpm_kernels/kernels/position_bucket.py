@@ -14,13 +14,13 @@ def position_bucket(
         key_len : int, 
         num_buckets : int, 
         max_distance : int, 
-        out : DevicePointer,    # (query_len, key_len)
+        out : DevicePointer,    # (key_len, query_len)
         bidirectional : bool, 
         stream : CUDAStream
     ) -> None:
 
-    gridDim = (query_len, 1, 1)
-    blockDim = (min(key_len, 1024), 1, 1)
+    gridDim = (key_len, 1, 1)
+    blockDim = (min(query_len, 1024), 1, 1)
     embedding_kernel.cu_position_bucket(
         gridDim, blockDim, 0, stream, [
             ctypes.c_int32(query_len),

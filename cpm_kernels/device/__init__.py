@@ -1,4 +1,4 @@
-from ..library import cuda, cudart
+from ..library import cuda, cudart, cublaslt
 
 ATTRIBUTES = {
     "cudaDevAttrMaxThreadsPerBlock": 1,
@@ -117,6 +117,7 @@ class _Device:
         if not self._initialized:
             cudart.cudaFree( None ) # lazy initialze
             self._initialized = True
+            self.cublasLtHandle = cublaslt.cublasLtCreate()
         
     
 
@@ -143,6 +144,10 @@ class Device:
     def architecture(self) -> int:
         return self.DevAttrComputeCapabilityMajor * 10 + self.DevAttrComputeCapabilityMinor
     
+    @property
+    def cublasLtHandle(self) -> cublaslt.cublasLtHandle_t:
+        return self._device.cublasLtHandle
+
     def use(self):
         self._device.use()
 
