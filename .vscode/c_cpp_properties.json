@@ -5,7 +5,9 @@
             "includePath": [
                 "cuda/includes"
             ],
-            "defines": [],
+            "defines": [
+                "__CUDA_ARCH__=600"
+            ],
             "compilerPath": "/usr/bin/gcc",
             "cStandard": "gnu17",
             "cppStandard": "gnu++14",

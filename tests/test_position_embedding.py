@@ -18,7 +18,7 @@ class TestPositionEmbedding(unittest.TestCase):
                 p1 = ct.PositionEmbedding(num_heads, num_buckets, max_distance, bidi)
                 p2 = ct.PositionEmbeddingTH(num_heads, num_buckets, max_distance, bidi)
                 state_dict = {
-                    "embedding.weight": torch.randn(num_buckets, num_heads, device="cuda").half()
+                    "weight": torch.randn(num_heads, num_buckets, device="cuda").half()
                 }
                 p1.load_state_dict(state_dict)
                 p2.load_state_dict(state_dict)
@@ -26,18 +26,20 @@ class TestPositionEmbedding(unittest.TestCase):
                 p1 = p1.cuda().half()
                 p2 = p2.cuda().half()
 
-                out = p1(32, 128, 128)
-                ans = p2(32, 128, 128)
+                out = p1(128, 128)
+                ans = p2(128, 128)
 
                 diff = torch.abs(out - ans).max()
                 self.assertLess(diff, 1e-5)
 
-                gradient_start = torch.randn(out.size(), device="cuda").half() / 32
+                gradient_start = torch.randn(out.size(), device="cuda").half()
+                if not bidi:
+                    mask = torch.arange(128, device="cuda")[:, None] <= torch.arange(128, device="cuda")[None, :]
+                    ct.inplace_mask(gradient_start, mask[None, :, :].repeat(num_heads, 1, 1), 0)
 
                 out.backward(gradient=gradient_start)
                 ans.backward(gradient=gradient_start)
-
-                diff = torch.abs(p1.embedding.weight.grad - p2.embedding.weight.grad).max()
+                diff = torch.abs(p1.weight.grad - p2.weight.grad).max()
                 self.assertLess(diff, 1e-1)
 
                 

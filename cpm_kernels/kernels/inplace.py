@@ -5,6 +5,8 @@ inplace_add_kernel = Kernel(
     "inplace_add",
     [
         "cu_inplace_add",
+        "cu_batch_add_forward",
+        "cu_batch_add_backward"
     ]
 )
 
@@ -179,6 +181,42 @@ def inplace_add_backward(
             ctypes.c_int32(batch),
             ctypes.c_int32(n),
             ctypes.c_int32(m),
+            ctypes.c_void_p(grad_out),
+            ctypes.c_void_p(grad)
+        ]
+    )
+
+def batched_add_forward(
+    batch : int, n : int,
+    x : DevicePointer,      # (batch, n)
+    y : DevicePointer,      # (n)
+    out : DevicePointer,    # (batch, n)
+    stream : CUDAStream
+):
+    gridDim = (batch, 1, 1)
+    blockDim = (min(n, 1024), 1, 1)
+    inplace_add_kernel.cu_batch_add_forward(
+        gridDim, blockDim, 0, stream, [
+            ctypes.c_int32(batch),
+            ctypes.c_int32(n),
+            ctypes.c_void_p(x),
+            ctypes.c_void_p(y),
+            ctypes.c_void_p(out)
+        ]
+    )
+
+def batched_add_backward(
+    batch : int, n : int,
+    grad_out : DevicePointer,   # (batch, n)
+    grad : DevicePointer,       # (n)
+    stream : CUDAStream
+):
+    gridDim = ( round_up(n, 32) // 32, 1, 1 )
+    blockDim = (32, 32, 1)
+    inplace_add_kernel.cu_batch_add_backward(
+        gridDim, blockDim, 0, stream, [
+            ctypes.c_int32(batch),
+            ctypes.c_int32(n),
             ctypes.c_void_p(grad_out),
             ctypes.c_void_p(grad)
         ]

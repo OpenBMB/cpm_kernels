@@ -94,3 +94,40 @@ class TestInplace(unittest.TestCase):
             diff = torch.abs(x - ans).max()
             self.assertLess(diff, 1e-5)
     
+    def test_batched_add(self):
+        with torch.cuda.device(3):
+            for shape in [
+                (3, 5, 6),
+                (17, 32, 128),
+                (32, 1024, 4096),
+                (33, 777, 1231),
+                (31, 123, 567),
+                (3, 4, 5, 6, 7),
+                (21, 66, 5, 3, 2),
+                (11, 3, 5, 7, 9)
+            ]:
+                batch = shape[0]
+                x = torch.randn(shape, device="cuda").half()
+                y = torch.randn(shape[1:], device="cuda").half()
+
+                x1 = x.clone().requires_grad_()
+                y1 = y.clone().requires_grad_()
+                x2 = x.clone().requires_grad_()
+                y2 = y.clone().requires_grad_()
+
+                out = ct.batched_add(x1, y1)
+                ans = ct.batched_addTH(x2, y2)
+                diff = torch.abs(out - ans).max() / batch
+
+                self.assertLess(diff, 1e-5)
+
+                gradient_start = torch.randn(shape, device="cuda").half()
+                out.backward(gradient=gradient_start)
+                ans.backward(gradient=gradient_start)
+                
+                diff = torch.abs(x1.grad - x2.grad).max()
+                self.assertLess(diff, 1e-3)
+
+                diff = torch.abs(y1.grad - y2.grad).max() / batch
+                self.assertLess(diff, 1e-3)
+    
