@@ -35,7 +35,11 @@ class TestPositionEmbedding(unittest.TestCase):
                 gradient_start = torch.randn(out.size(), device="cuda").half()
                 if not bidi:
                     mask = torch.arange(128, device="cuda")[:, None] <= torch.arange(128, device="cuda")[None, :]
-                    ct.inplace_mask(gradient_start, mask[None, :, :].repeat(num_heads, 1, 1), 0)
+                    gradient_start = torch.where(
+                        mask[None, :, :].repeat(num_heads, 1, 1),
+                        gradient_start,
+                        torch.zeros_like(gradient_start),
+                    )
 
                 out.backward(gradient=gradient_start)
                 ans.backward(gradient=gradient_start)

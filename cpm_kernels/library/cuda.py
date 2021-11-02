@@ -191,6 +191,7 @@ CUDA_ERROR_UNKNOWN = 999
 
 CUmodule = ctypes.c_void_p
 CUfunction = ctypes.c_void_p
+CUcontext = ctypes.c_void_p
 
 ### Error handling
 
@@ -263,3 +264,9 @@ def cuLaunchKernel(
     else:
         kernelParams = None
     checkCUStatus(cuda.cuLaunchKernel(func, gridDimX, gridDimY, gridDimZ, blockDimX, blockDimY, blockDimZ, sharedMemBytes, hStream, kernelParams, None))
+
+@cuda.bind("cuCtxGetCurrent", [ctypes.POINTER(CUcontext)], CUresult)
+def cuCtxGetCurrent() -> CUcontext:
+    context = CUcontext()
+    checkCUStatus(cuda.cuCtxGetCurrent(ctypes.byref(context)))
+    return context

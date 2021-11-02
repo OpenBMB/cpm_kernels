@@ -20,6 +20,7 @@ class KernelFunction:
             sharedMemBytes : int, stream : cudart.cudaStream_t, params : List[Any] ) -> None:
         curr_device = cudart.cudaGetDevice()
         func = self._funcs[curr_device]
+        cudart.cudaSetDevice(curr_device)   # pytorch ctx changed
         cuda.cuLaunchKernel(func, 
             gridDim[0], gridDim[1], gridDim[2], 
             blockDim[0], blockDim[1], blockDim[2], 

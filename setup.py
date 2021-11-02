@@ -4,7 +4,7 @@ from glob import glob
 if __name__ == "__main__":
     setup(
         name='cpm_kernels',
-        version='1.0.0a1',
+        version='1.0.0a4',
         packages=find_packages(),
         description='CPM CUDA kernels',
         long_description=open("./README.md", 'r').read(),
@@ -32,8 +32,7 @@ if __name__ == "__main__":
         ],
         license='Apache 2.0',
         include_package_data=True,
-        data_files=[
-            ("cpm_kernels/kernels/cuda", glob("cuda/*.fatbin"))
-        ]
-        
+        package_data={
+            'cpm_kernels.kernels': ['cuda/*.fatbin']
+        }
     )

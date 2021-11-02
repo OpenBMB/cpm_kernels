@@ -298,6 +298,13 @@ cudaMemcpyDeviceToDevice = 3
 cudaMemcpyDefault = 4
 #   Direction of the transfer is inferred from the pointer values. Requires unified virtual addressing 
 
+class dim3(ctypes.Structure):
+    _fields_ = [
+        ('x', ctypes.c_uint),
+        ('y', ctypes.c_uint),
+        ('z', ctypes.c_uint),
+    ]
+
 
 @cuda.bind("cudaGetErrorName", [cudaError_t], ctypes.c_char_p)
 def cudaGetErrorName(error : cudaError_t) -> str:
@@ -434,3 +441,30 @@ def cudaEventRecord(event : cudaEvent_t, stream : cudaStream_t = 0) -> None:
 @cuda.bind("cudaMemcpy", [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t, cudaMemcpyKind], cudaError_t)
 def cudaMemcpy(dst : ctypes.c_void_p, src : ctypes.c_void_p, size : int, kind : cudaMemcpyKind) -> None:
     checkCUDAStatus(cuda.cudaMemcpy(dst, src, size, kind))
+
+### Excution control
+@cuda.bind("cudaLaunchKernel", [
+    ctypes.c_void_p, 
+    dim3, dim3, 
+    ctypes.POINTER(ctypes.c_void_p),
+    ctypes.c_size_t, cudaStream_t
+], cudaError_t)
+def cudaLaunchKernel(
+    func : ctypes.c_void_p,
+    gridDim : dim3,
+    blockDim : dim3,
+    kernelParams : List[int],
+    sharedMem : int,
+    stream : cudaStream_t
+):
+    if len(kernelParams) > 0:
+        kernelParams = (ctypes.c_void_p * len(kernelParams))(*kernelParams)
+    else:
+        kernelParams = None
+    checkCUDAStatus(cuda.cudaLaunchKernel(func, gridDim, blockDim, kernelParams, sharedMem, stream))
+
+@cuda.bind("cudaGetFuncBySymbol", [ctypes.POINTER(ctypes.c_void_p), ctypes.c_void_p], cudaError_t)
+def cudaGetFuncBySymbol(func : ctypes.c_void_p) -> ctypes.c_void_p:
+    ret = ctypes.c_void_p()
+    checkCUDAStatus(cuda.cudaGetFuncBySymbol(ctypes.byref(ret), func))
+    return ret 
