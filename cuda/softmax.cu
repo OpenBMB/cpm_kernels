@@ -37,6 +37,40 @@ CPM_KERNEL_EXPORT  void cu_softmax_forward(
 }
 
 // grid <batch, m / 32>,    thread <32, 32>
+CPM_KERNEL_EXPORT  void cu_softmax_inplace_forward(
+    int32_t batch, int32_t n, int32_t m,
+    half *x             // batch, n, m
+) {
+    float local_max = -INFINITY;
+
+    int32_t base_mat_idx = (blockIdx.x * n + threadIdx.y) * m + blockIdx.y * WARP_SZ + threadIdx.x;
+    int32_t col_idx = blockIdx.y * WARP_SZ + threadIdx.x;
+    for (int i = 0; i < n; i += WARP_SZ) {
+        if (col_idx < m && i + threadIdx.y < n) {
+            local_max = fmaxf((float)x[base_mat_idx + i * m], local_max);
+        }
+    }
+
+    local_max = transposeReduceMax(local_max);
+    
+    float local_sum = 0;
+    for (int i = 0; i < n; i += WARP_SZ) {
+        if (col_idx < m && i + threadIdx.y < n) {
+            local_sum += expf((float)x[base_mat_idx + i * m] - local_max);
+        }
+    }
+
+    local_sum = transposeReduceSum(local_sum);
+    
+    for (int i = 0; i < n; i += WARP_SZ) {
+        if (col_idx < m && i + threadIdx.y < n) {
+            x[base_mat_idx + i * m] = __float2half( expf((float)x[base_mat_idx + i * m] - local_max) / local_sum );
+        }
+    }
+}
+
+
+// grid <batch, m / 32>,    thread <32, 32>
 CPM_KERNEL_EXPORT  void cu_softmax_backward(
     int32_t batch, int32_t n, int32_t m,
     const half *out,       // batch, n, m 

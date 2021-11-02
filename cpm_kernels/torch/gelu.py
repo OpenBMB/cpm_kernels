@@ -1,5 +1,5 @@
 import torch
-from ..kernels import gelu_forward, gelu_backward
+from ..kernels import gelu_forward, gelu_backward, gelu_inplace_forward
 
 class OpGeLU(torch.autograd.Function):
     """
@@ -40,7 +40,7 @@ class OpGeLU(torch.autograd.Function):
         )
         return grad
 
-def gelu(x : torch.Tensor):
+def gelu(x : torch.Tensor) -> torch.Tensor:
     return OpGeLU.apply(x)
 
 
@@ -52,3 +52,12 @@ def gelu_impl(x):
 
 def geluTH(x : torch.Tensor):
     return gelu_impl(x)
+
+def gelu_inplace(x : torch.Tensor) -> None:
+    assert x.is_contiguous() and x.is_cuda and x.dtype == torch.half
+    gelu_inplace_forward(
+        x.size(0),
+        x.stride(0),
+        x.data_ptr(),
+        torch.cuda.current_stream().cuda_stream
+    )

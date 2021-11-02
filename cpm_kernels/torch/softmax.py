@@ -1,5 +1,5 @@
 import torch
-from ..kernels import softmax_forward, softmax_backward
+from ..kernels import softmax_forward, softmax_backward, softmax_inplace_forward
 
 class OpSoftmax(torch.autograd.Function):
     """
@@ -33,8 +33,16 @@ class OpSoftmax(torch.autograd.Function):
         )
         return grad
 
-def softmax(x : torch.Tensor):
+def softmax(x : torch.Tensor) -> torch.Tensor:
     return OpSoftmax.apply(x)
 
-def softmaxTH(x : torch.Tensor):
+def softmaxTH(x : torch.Tensor) -> torch.Tensor:
     return torch.nn.functional.softmax(x, dim=1)
+
+def softmax_inplace(x : torch.Tensor) -> None:
+    assert x.is_cuda and x.ndim == 3 and x.is_contiguous() and x.dtype == torch.half
+    softmax_inplace_forward(
+        x.size(0), x.size(1), x.size(2),
+        x.data_ptr(),
+        torch.cuda.current_stream().cuda_stream
+    )

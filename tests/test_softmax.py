@@ -30,3 +30,22 @@ class TestSoftmax(unittest.TestCase):
                 
                 diff_grad = (x1.grad - x2.grad).abs().max()
                 self.assertLess(diff_grad, 5e-3)
+    
+    def test_softmax_inplace(self):
+        with torch.cuda.device(6):
+            for shape in [
+                (1, 2, 32),
+                (4, 128, 128),
+                (16, 128, 32),
+                (4, 16, 128),
+                (123, 512, 321),
+                (123, 768, 321),
+                (233, 1024, 321),
+                (4, 123, 16),
+                (4, 321, 16),
+            ]:
+                x = torch.randn(*shape, device="cuda").half()
+                ans = ct.softmaxTH(x)
+                ct.softmax_inplace(x)
+                diff = (x - ans).abs().max()
+                self.assertLess(diff, 5e-3)

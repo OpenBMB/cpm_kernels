@@ -5,6 +5,7 @@ softmax_kernel = Kernel(
     "softmax",
     [
         "cu_softmax_forward",
+        "cu_softmax_inplace_forward",
         "cu_softmax_backward"
     ]
 )
@@ -24,6 +25,22 @@ def softmax_forward(
             ctypes.c_int32(m),
             ctypes.c_void_p(inp),
             ctypes.c_void_p(out)
+        ]
+    )
+
+def softmax_inplace_forward(
+        batch : int, n : int, m : int,
+        inp : DevicePointer,    # (batch, n, m)
+        stream : CUDAStream
+    ):
+    gridDim = (batch, round_up(m, 32) // 32, 1)
+    blockDim = (32, 32, 1)
+    softmax_kernel.cu_softmax_inplace_forward(
+        gridDim, blockDim, 0, stream, [
+            ctypes.c_int32(batch),
+            ctypes.c_int32(n),
+            ctypes.c_int32(m),
+            ctypes.c_void_p(inp)
         ]
     )
 

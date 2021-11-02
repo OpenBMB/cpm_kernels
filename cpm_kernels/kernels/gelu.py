@@ -28,6 +28,23 @@ def gelu_forward(
         ]
     )
 
+def gelu_inplace_forward(
+        batch : int,
+        n : int,
+        mat :  DevicePointer,
+        stream : CUDAStream
+    ):
+    gridDim = (batch, 1, 1)
+    blockDim = (min(n, 1024), 1, 1)
+    gelu_kernel.cu_gelu_forward(
+        gridDim, blockDim, 0, stream, [
+            ctypes.c_int32(batch),
+            ctypes.c_int32(n),
+            ctypes.c_void_p(mat),
+            ctypes.c_void_p(mat)
+        ]
+    )
+
 def gelu_backward(
         batch : int,
         n : int,

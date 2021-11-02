@@ -50,6 +50,53 @@ CPM_KERNEL_EXPORT void cu_layernorm_forward(
     }
 }
 
+// block <batch_idx, m/32>   thread <32, 32>
+CPM_KERNEL_EXPORT void cu_layernorm_inplace_forward(
+    int32_t batch, int32_t n, int32_t m,
+    half *mat,    // (batch, n, m)
+    float eps,
+    bool rd_mean
+) {
+    int32_t base_mat_idx = (blockIdx.x * n + threadIdx.y) * m + blockIdx.y * WARP_SZ + threadIdx.x;
+    int32_t col_idx = blockIdx.y * WARP_SZ + threadIdx.x;
+
+    float local_total_v = 0.0;
+    float local_total_v2 = 0.0;
+    for (int i = 0; i < n; i += WARP_SZ) {
+        float v = 0;
+        if (col_idx < m && i + threadIdx.y < n) {
+            v = (float)(mat[base_mat_idx + i * m]);
+        }
+
+        if (rd_mean) local_total_v += v;
+        local_total_v2 += v * v;
+    }
+
+    local_total_v2 = transposeReduceSum(local_total_v2) / (float)n;
+    if (rd_mean) {
+        local_total_v = transposeReduceSum(local_total_v) / (float)n;
+        local_total_v2 -= local_total_v * local_total_v;
+    }
+
+    local_total_v2 = rsqrtf(local_total_v2 + eps);
+
+    float local_mean =  local_total_v;
+    float local_var = local_total_v2;
+    if (rd_mean) {
+        for (int i = 0; i < n; i += WARP_SZ) {
+            if (col_idx < m && i + threadIdx.y < n) {
+                mat[base_mat_idx + i * m] = __float2half(((float)(mat[base_mat_idx + i * m]) - local_mean) * local_var);
+            }
+        }
+    } else {
+        for (int i = 0; i < n; i += blockDim.y) {
+            if (col_idx < m && i + threadIdx.y < n) {
+                mat[base_mat_idx + i * m] = __float2half((float)(mat[base_mat_idx + i * m]) * local_var);
+            }
+        }
+    }
+}
+
 // block <batch_idx, offset_m/32>   thread <32, 32>
 CPM_KERNEL_EXPORT void cu_layernorm_forward_v(
     int32_t batch, int32_t n, int32_t m,

@@ -40,6 +40,6 @@ class TestPositionEmbedding(unittest.TestCase):
                 out.backward(gradient=gradient_start)
                 ans.backward(gradient=gradient_start)
                 diff = torch.abs(p1.weight.grad - p2.weight.grad).max()
-                self.assertLess(diff, 1e-1)
+                self.assertLess(diff, 1e-5)
 
                 

@@ -5,6 +5,7 @@ layernorm_kernel = Kernel(
     "layernorm",
     [
         "cu_layernorm_forward",
+        "cu_layernorm_inplace_forward",
         "cu_layernorm_forward_v",
         "cu_layernorm_forward_mv",
         "cu_layernorm_backward_v",
@@ -29,6 +30,26 @@ def layernorm_forward(
             ctypes.c_int32(m),
             ctypes.c_void_p(mat),
             ctypes.c_void_p(out),
+            ctypes.c_float(eps),
+            ctypes.c_bool(rd_mean)
+        ]
+    )
+
+def layernorm_inplace_forward(
+        batch : int, n : int, m : int,
+        mat : DevicePointer,    # (batch, n, m)
+        eps : float,
+        rd_mean : bool,
+        stream : CUDAStream
+    ):
+    gridDim = (batch, round_up(m, 32) // 32, 1)
+    blockDim = (32, 32, 1)
+    layernorm_kernel.cu_layernorm_inplace_forward(
+        gridDim, blockDim, 0, stream, [
+            ctypes.c_int32(batch),
+            ctypes.c_int32(n),
+            ctypes.c_int32(m),
+            ctypes.c_void_p(mat),
             ctypes.c_float(eps),
             ctypes.c_bool(rd_mean)
         ]

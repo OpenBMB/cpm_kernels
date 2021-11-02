@@ -16,6 +16,10 @@ all: $(TARGETS)
 %.fatbin: %.cu
 	$(NVCC) -fatbin $^ $(OPTIONS) -o $@
 
-.PHONY : clean
+.PHONY : clean, copy
 clean:
 	rm $(TARGETS)
+
+copy:
+	mkdir -p ../cpm_kernels/kernels/cuda
+	cp $(TARGETS) ../cpm_kernels/kernels/cuda

@@ -22,3 +22,11 @@ class TestGeLU(unittest.TestCase):
             diff = torch.abs(x1.grad - x2.grad).max()
             self.assertLess(diff, 1e-2)
 
+    def test_gelu_inplace(self):
+        with torch.cuda.device(1):
+            x = torch.randn(4, 1237, device="cuda").half()
+            ans = ct.geluTH(x)
+            ct.gelu_inplace(x)
+
+            diff = torch.abs(x - ans).max()
+            self.assertLess(diff, 1e-2)
