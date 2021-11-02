@@ -83,36 +83,6 @@ class TestArith(unittest.TestCase):
     
     def test_mask_inf(self):
         with torch.cuda.device(3):
-            x = torch.randn(3, 5, 7, 9, 123, 321, device="cuda").half()
-            mask = torch.randn(3, 5, 7, 9, 123, 321, device="cuda") < 0
-            value = float("-inf")
-            
-            ans = torch.where(
-                mask,
-                x,
-                torch.scalar_tensor(value, device=x.device, dtype=x.dtype),
-            )
-            ct.inplace_mask(x, mask, value)
-            self.assertTrue(torch.isclose(x, ans, 1e-5).all())
-
-    def test_mask_zero(self):
-        with torch.cuda.device(3):
-            x = torch.randn(3, 5, 7, 9, 123, 321, device="cuda").half()
-            mask = torch.randn(3, 5, 7, 9, 123, 321, device="cuda") < 0
-            value = 0
-            
-            ans = torch.where(
-                mask,
-                x,
-                torch.scalar_tensor(value, device=x.device, dtype=x.dtype),
-            )
-            ct.inplace_mask(x, mask, value)
-
-            diff = torch.abs(x - ans).max()
-            self.assertLess(diff, 1e-5)
-        
-    def test_batched_add(self):
-        with torch.cuda.device(3):
             for shape in [
                 (3, 5, 6),
                 (17, 32, 128),
@@ -122,6 +92,76 @@ class TestArith(unittest.TestCase):
                 (3, 4, 5, 6, 8),
                 (21, 66, 5, 3, 2),
                 (11, 3, 5, 7, 10)
+            ]:
+                x = torch.randn(*shape, device="cuda").half()
+                mask = torch.randn((shape[0], shape[2]), device="cuda") < 0
+                value = float("-inf")
+                
+                x1 = x.clone().requires_grad_()
+                x2 = x.clone().requires_grad_()
+
+                ans = ct.maskTH(x1, mask, value)
+                out = ct.mask(x2, mask, value)
+                self.assertTrue(torch.isclose(out, ans, 1e-5).all())
+
+                gradient_start = torch.randn_like(out)
+                out.backward(gradient=gradient_start)
+                ans.backward(gradient=gradient_start)
+
+                diff = torch.abs(x1.grad - x2.grad).max()
+                self.assertLess(diff, 1e-5)
+
+                ct.mask_inplace(x, mask, value)
+                diff = torch.abs(x - ans).max()
+
+                self.assertLess(diff, 1e-5)
+
+    def test_mask_inf(self):
+        with torch.cuda.device(3):
+            for shape in [
+                (3, 5, 6),
+                (17, 32, 128),
+                (32, 1024, 4096),
+                (33, 777, 1232),
+                (31, 123, 566),
+                (3, 5, 8),
+                (21, 66, 2),
+                (11, 3, 10)
+            ]:
+                x = torch.randn(*shape, device="cuda").half()
+                mask = torch.randn((shape[0], shape[2]), device="cuda") < 0
+                value = 0
+                
+                x1 = x.clone().requires_grad_()
+                x2 = x.clone().requires_grad_()
+
+                ans = ct.maskTH(x1, mask, value)
+                out = ct.mask(x2, mask, value)
+                self.assertTrue(torch.isclose(out, ans, 1e-5).all())
+
+                gradient_start = torch.randn_like(out)
+                out.backward(gradient=gradient_start)
+                ans.backward(gradient=gradient_start)
+
+                diff = torch.abs(x1.grad - x2.grad).max()
+                self.assertLess(diff, 1e-5)
+
+                ct.mask_inplace(x, mask, value)
+                diff = torch.abs(x - ans).max()
+
+                self.assertLess(diff, 1e-5)
+        
+    def test_batched_add(self):
+        with torch.cuda.device(3):
+            for shape in [
+                (3, 5, 6),
+                (17, 32, 128),
+                (32, 1024, 4096),
+                (33, 777, 1232),
+                (31, 123, 566),
+                (3, 5, 8),
+                (21, 66, 2),
+                (11, 3, 10)
             ]:
                 x = torch.randn(*shape, device="cuda").half()
                 y = torch.randn(x.size()[1:], device="cuda").half()
