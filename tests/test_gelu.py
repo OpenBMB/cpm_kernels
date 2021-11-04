@@ -5,7 +5,7 @@ import unittest
 
 class TestGeLU(unittest.TestCase):
     def test_gelu(self):
-        with torch.cuda.device(1):
+        with torch.cuda.device(2):
             x = torch.randn(4, 16, 512, 1024, device="cuda").half()
             x1 = x.clone().requires_grad_()
             x2 = x.clone().requires_grad_()
@@ -23,7 +23,7 @@ class TestGeLU(unittest.TestCase):
             self.assertLess(diff, 1e-2)
 
     def test_gelu_inplace(self):
-        with torch.cuda.device(1):
+        with torch.cuda.device(0):
             x = torch.randn(4, 1237, device="cuda").half()
             ans = ct.geluTH(x)
             ct.gelu_inplace(x)

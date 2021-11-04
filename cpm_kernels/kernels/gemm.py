@@ -3,14 +3,18 @@ from ..device import Device, current_device
 from .base import Kernel, DevicePointer, CUDAStream, round_up
 import ctypes
 
-gelu_kernel = Kernel(
+gemm_kernel = Kernel(
     "gemm",
     [
         "cu_gemm_round",
         "cu_gemm_round_transpose",
         "cu_gemm_scale",
         "cu_gemm_calc_scale",
-        "cu_gemm_calc_scale_transpose"
+        "cu_gemm_calc_scale_transpose",
+        "cu_gemm_backward_round_scale",
+        "cu_gemm_backward_scale_round",
+        "cu_gemm_scale_x",
+        "cu_gemm_scale_y",
     ]
 )
 
@@ -25,7 +29,7 @@ def gemm_round(
     ):
     gridDim = (batch, n, 1)
     blockDim = (min(m, 1024), 1, 1)
-    gelu_kernel.cu_gemm_round(
+    gemm_kernel.cu_gemm_round(
         gridDim, blockDim, 0, stream, [
             ctypes.c_int32(batch),
             ctypes.c_int32(n),
@@ -47,7 +51,7 @@ def gemm_round_transpose(
     ):
     gridDim = (batch, n, 1)
     blockDim = (min(m, 1024), 1, 1)
-    gelu_kernel.cu_gemm_round_transpose(
+    gemm_kernel.cu_gemm_round_transpose(
         gridDim, blockDim, 0, stream, [
             ctypes.c_int32(batch),
             ctypes.c_int32(n),
@@ -60,17 +64,17 @@ def gemm_round_transpose(
 
 def gemm_scale(
         batch : int, n : int, m : int,
-        mat : DevicePointer,        # (b, n, m)
-        scale_x : DevicePointer,    # (b, n),
-        scale_y : DevicePointer,    # (b, m),
-        out : DevicePointer,        # (b, n, m)
+        mat : DevicePointer,        # (b, n, m)     int32
+        scale_x : DevicePointer,    # (b, n),       fp16
+        scale_y : DevicePointer,    # (b, m),       fp16
+        out : DevicePointer,        # (b, n, m)     fp16
         broad_cast_x : bool,
         broad_cast_y : bool,
         stream : CUDAStream
     ):
     gridDim = (batch, n, 1)
     blockDim = (min(m, 1024), 1, 1)
-    gelu_kernel.cu_gemm_scale(
+    gemm_kernel.cu_gemm_scale(
         gridDim, blockDim, 0, stream, [
             ctypes.c_int32(batch),
             ctypes.c_int32(n),
@@ -86,13 +90,13 @@ def gemm_scale(
 
 def gemm_calc_scale(
         batch : int, n : int, m : int,
-        mat : DevicePointer,    # (b, n, m)
-        out : DevicePointer,    # (b, n)
+        mat : DevicePointer,    # (b, n, m) fp16
+        out : DevicePointer,    # (b, n)    fp16
         stream : CUDAStream
     ):
     gridDim = (batch, n, 1)
     blockDim = (min(round_up(m, 32), 1024), 1, 1)
-    gelu_kernel.cu_gemm_calc_scale(
+    gemm_kernel.cu_gemm_calc_scale(
         gridDim, blockDim, 0, stream, [
             ctypes.c_int32(batch),
             ctypes.c_int32(n),
@@ -110,7 +114,7 @@ def gemm_calc_scale_transpose(
     ):
     gridDim = (batch, round_up(m, 32) // 32, 1)
     blockDim = (32, 32, 1)
-    gelu_kernel.cu_gemm_calc_scale_transpose(
+    gemm_kernel.cu_gemm_calc_scale_transpose(
         gridDim, blockDim, 0, stream, [
             ctypes.c_int32(batch),
             ctypes.c_int32(n),
@@ -232,4 +236,95 @@ def gemm_fp16(
         out, layoutC,
         out, layoutC,
         stream
+    )
+
+
+##### Backward
+
+def gemm_backward_round_scale(
+        batch : int, n : int, m : int,
+        mat : DevicePointer,        # (batch, n, m) fp16
+        scale_y : DevicePointer,    # (batch, m)    fp16
+        out : DevicePointer,        # (batch, n, m) int8
+        scale_x : DevicePointer,    # (batch, n)    fp16
+        broad_cast_y : bool,
+        stream : CUDAStream
+    ):
+    gridDim = (batch, n, 1)
+    blockDim = (min(round_up(m, 32), 1024), 1, 1)
+    gemm_kernel.cu_gemm_backward_round_scale(
+        gridDim, blockDim, 0, stream, [
+            ctypes.c_int32(batch),
+            ctypes.c_int32(n),
+            ctypes.c_int32(m),
+            ctypes.c_void_p(mat),
+            ctypes.c_void_p(scale_y),
+            ctypes.c_void_p(out),
+            ctypes.c_void_p(scale_x),
+            ctypes.c_bool(broad_cast_y)
+        ]
+    )
+
+def gemm_backward_scale_round(
+        batch : int, n : int, m : int,
+        mat : DevicePointer,        # (batch, n, m) int8
+        scale_x : DevicePointer,    # (batch, n)    fp16
+        out : DevicePointer,        # (batch, n, m) fp16
+        scale_y : DevicePointer,    # (batch, m)    fp16
+        broad_cast_x : bool,
+        stream : CUDAStream
+    ):
+    gridDim = (batch, round_up(m, 32) // 32, 1)
+    blockDim = (32, 32, 1)
+    gemm_kernel.cu_gemm_backward_scale_round(
+        gridDim, blockDim, 0, stream, [
+            ctypes.c_int32(batch),
+            ctypes.c_int32(n),
+            ctypes.c_int32(m),
+            ctypes.c_void_p(mat),
+            ctypes.c_void_p(scale_x),
+            ctypes.c_void_p(out),
+            ctypes.c_void_p(scale_y),
+            ctypes.c_bool(broad_cast_x)
+        ]
+    )
+
+def gemm_scale_x(
+        batch : int, n : int, m : int,
+        mat : DevicePointer,        # (batch, n, m) int32
+        scale_x : DevicePointer,    # (batch, n)    fp16
+        out : DevicePointer,        # (batch, n, m) fp16
+        stream : CUDAStream
+    ):
+    gridDim = (batch, n, 1)
+    blockDim = (min(m, 1024), 1, 1)
+    gemm_kernel.cu_gemm_scale_x(
+        gridDim, blockDim, 0, stream, [
+            ctypes.c_int32(batch),
+            ctypes.c_int32(n),
+            ctypes.c_int32(m),
+            ctypes.c_void_p(mat),
+            ctypes.c_void_p(scale_x),
+            ctypes.c_void_p(out)
+        ]
+    )
+
+def gemm_scale_y(
+        batch : int, n : int, m : int,
+        mat : DevicePointer,        # (batch, n, m) int32
+        scale_y : DevicePointer,    # (batch, m)    fp16
+        out : DevicePointer,        # (batch, n, m) fp16
+        stream : CUDAStream
+    ):
+    gridDim = (batch, n, 1)
+    blockDim = (min(m, 1024), 1, 1)
+    gemm_kernel.cu_gemm_scale_y(
+        gridDim, blockDim, 0, stream, [
+            ctypes.c_int32(batch),
+            ctypes.c_int32(n),
+            ctypes.c_int32(m),
+            ctypes.c_void_p(mat),
+            ctypes.c_void_p(scale_y),
+            ctypes.c_void_p(out)
+        ]
     )

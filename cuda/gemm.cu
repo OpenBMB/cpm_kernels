@@ -105,3 +105,110 @@ CPM_KERNEL_EXPORT void cu_gemm_calc_scale_transpose(
         out[blockIdx.x * m + col_idx] = __float2half(local_max / 127.0);
     }
 }
+
+// Backward
+
+// grid <batch, n>,   thread <min(round_up(m, 32), 1024)>
+CPM_KERNEL_EXPORT void cu_gemm_backward_round_scale(
+    int32_t batch, int32_t n, int32_t m,
+    const half *mat,        // (batch, n, m)
+    const half *scale_y,    // (batch, m)   or  (1, m) if broadcast_y
+    int8_t *out,            // (batch, n, m)
+    half *scale_x,          // (batch, n)
+    bool broad_cast_y
+) {
+    int32_t base_idx = (blockIdx.x * n + blockIdx.y) * m + threadIdx.x;
+    int32_t base_m_idx = blockIdx.x * m + threadIdx.x;
+    if (broad_cast_y) base_m_idx = threadIdx.x;
+
+    float local_max = 0;
+    __shared__ float global_max;
+    for (int i = 0; i < m; i += blockDim.x) {
+        if (i + threadIdx.x < m) {
+            local_max = fmaxf(fabsf((float)(mat[base_idx + i]) * (float)__ldg(scale_y + base_m_idx + i)), local_max);
+        }
+    }
+    local_max = blockReduceMax(local_max) / 127.0;
+    if (threadIdx.x == 0) {
+        global_max = local_max;
+        scale_x[blockIdx.x * n + blockIdx.y] = __float2half(local_max);
+    }
+    __syncthreads();
+    local_max = global_max;
+    for (int i = 0; i < m; i += blockDim.x) {
+        if (i + threadIdx.x < m) {
+            out[base_idx + i] = (int8_t)nearbyintf((float)mat[base_idx + i] * (float)__ldg(scale_y + base_m_idx + i) / local_max);
+        }
+    }
+}
+
+// grid <batch, m / WARP_SZ>,   thread <WARP_SZ, WARP_SZ>
+CPM_KERNEL_EXPORT void cu_gemm_backward_scale_round(
+    int32_t batch, int32_t n, int32_t m,
+    const half *mat,        // (batch, n, m)
+    const half *scale_x,    // (batch, n)   or  (1, n)    if broad_cast_x
+    int8_t *out,            // (batch, n, m)
+    half *scale_y,          // (batch, m)
+    bool broad_cast_x
+) {
+    int32_t col = blockIdx.y * WARP_SZ + threadIdx.x;
+    int32_t base_idx = (blockIdx.x * n + threadIdx.y) * m + col;
+    int32_t base_n_idx = blockIdx.x * n + threadIdx.y;
+    if (broad_cast_x) base_n_idx = threadIdx.y;
+    
+    float local_max = 0;
+
+    if (col < m) {
+        for (int i = 0; i < n; i += blockDim.y) {
+            if (i + threadIdx.y < n) {
+                local_max = fmaxf(fabsf( (float)mat[base_idx + i * m] * (float)__ldg(scale_x + base_n_idx + i) ), local_max);
+            }
+        }
+    }
+    local_max = transposeReduceMax(local_max);  // reduce max along y
+    local_max = local_max / 127.0;
+    if (threadIdx.y == 0 && col < m) {
+        scale_y[blockIdx.x * m + col] = __float2half(local_max);
+    }
+    
+    if (col < m) {
+        for (int i = 0; i < n; i += blockDim.y) {
+            if (i + threadIdx.y < n) {
+                out[base_idx + i * m] = (int8_t)nearbyintf((float)mat[base_idx + i * m] * (float)__ldg(scale_x + base_n_idx + i) / local_max);
+            }
+        }
+    }
+}
+
+
+// block <batch, n>,    thread <min(1024, m)>
+CPM_KERNEL_EXPORT void cu_gemm_scale_x (
+    int32_t batch, int32_t n, int32_t m,
+    const int32_t *mat,     // (batch, n, m)
+    const half *scale_x,    // (batch, n)
+    half *out               // (batch, n, m)
+) {
+    float scale = scale_x[blockIdx.x * n + blockIdx.y];
+    int32_t base_idx = (blockIdx.x * n + blockIdx.y) * m + threadIdx.x;
+    for (int i = 0; i < m; i += blockDim.x) {
+        if (i + threadIdx.x < m) {
+            out[base_idx + i] = __float2half(scale * (float)mat[base_idx + i]);
+        }
+    }
+}
+
+// block <batch, n>,    thread <min(1024, m)>
+CPM_KERNEL_EXPORT void cu_gemm_scale_y (
+    int32_t batch, int32_t n, int32_t m,
+    const int32_t *mat,     // (batch, n, m)
+    const half *scale_y,    // (batch, m)
+    half *out               // (batch, n, m)
+) {
+    int32_t base_idx = (blockIdx.x * n + blockIdx.y) * m + threadIdx.x;
+    int32_t base_m_idx = blockIdx.x * m + threadIdx.x;
+    for (int i = 0; i < m; i += blockDim.x) {
+        if (i + threadIdx.x < m) {
+            out[base_idx + i] = __float2half((float)mat[base_idx + i] * (float)__ldg(scale_y + base_m_idx + i));
+        }
+    }
+}

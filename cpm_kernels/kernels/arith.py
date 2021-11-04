@@ -68,7 +68,7 @@ def arith_element_mul(
 def arith_batch_add_forward(
         batch : int, n : int,
         x : DevicePointer,    # (batch, n)  fp16
-        y : DevicePointer,    # (batch, n)  fp16
+        y : DevicePointer,    # (n)  fp16
         out : DevicePointer,  # (batch, n)  fp16
         stream : CUDAStream
     ):
@@ -92,7 +92,7 @@ def arith_batch_add_forward(
 def arith_batch_add_backward(
         batch : int, n : int,
         grad_out : DevicePointer,  # (batch, n) fp16
-        grad : DevicePointer,      # (batch, n) fp16
+        grad : DevicePointer,      # (n) fp16
         stream : CUDAStream
     ):
     gridDim = ( round_up(n, 32) // 32, 1, 1 )
