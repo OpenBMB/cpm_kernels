@@ -2,6 +2,9 @@ import os, sys, struct
 import ctypes
 import ctypes.util
 from functools import wraps
+from typing import Callable, TypeVar
+
+LibCall = TypeVar("LibCall")
 
 def lookup_dll(prefix):
     paths = os.environ.get("PATH", "").split(os.pathsep)
@@ -57,7 +60,7 @@ class Lib:
         ret.__lib = lib
         return ret
 
-    def bind(self, name, arg_types, ret_type):
+    def bind(self, name, arg_types, ret_type) -> Callable[[LibCall], LibCall]:
         if self.__lib is None:
             def decorator(f):
                 @wraps(f)

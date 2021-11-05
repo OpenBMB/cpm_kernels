@@ -442,6 +442,10 @@ def cudaEventRecord(event : cudaEvent_t, stream : cudaStream_t = 0) -> None:
 def cudaMemcpy(dst : ctypes.c_void_p, src : ctypes.c_void_p, size : int, kind : cudaMemcpyKind) -> None:
     checkCUDAStatus(cuda.cudaMemcpy(dst, src, size, kind))
 
+@cuda.bind("cudaMemcpyAsync", [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t, cudaMemcpyKind, cudaStream_t], cudaError_t)
+def cudaMemcpyAsync(dst : ctypes.c_void_p, src : ctypes.c_void_p, size : int, kind : cudaMemcpyKind, stream : cudaStream_t) -> None:
+    checkCUDAStatus(cuda.cudaMemcpyAsync(dst, src, size, kind, stream))
+
 ### Excution control
 @cuda.bind("cudaLaunchKernel", [
     ctypes.c_void_p, 
