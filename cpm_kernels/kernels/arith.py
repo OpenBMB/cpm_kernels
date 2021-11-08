@@ -9,6 +9,7 @@ arith_kernel = Kernel(
         "cu_arith_batch_add_forward",
         "cu_arith_batch_add_backward",
         "cu_arith_ln_mul_add",
+        "cu_arith_ln_add",
         "cu_arith_ln_mul",
         "cu_arith_ln_div",
         "cu_arith_ln_sub_div",
@@ -132,6 +133,32 @@ def arith_ln_mul_add(
             ctypes.c_void_p(out)
         ]
     )
+
+def arith_ln_add(
+        batch : int, n : int, m : int,
+        inp : DevicePointer,    # (batch, n, m) fp16
+        beta : DevicePointer,   # (n)           fp16
+        out : DevicePointer,    # (batch, n, m) fp16
+        stream : CUDAStream
+    ):
+    """
+    out = x + beta[None, :, None]
+    """
+    assert m % 2 == 0
+    m = m // 2
+    gridDim = (batch, n, 1)
+    blockDim = (min(m, 1024), 1, 1)
+    arith_kernel.cu_arith_ln_add(
+        gridDim, blockDim, 0, stream, [
+            ctypes.c_int32(batch),
+            ctypes.c_int32(n),
+            ctypes.c_int32(m),
+            ctypes.c_void_p(inp),
+            ctypes.c_void_p(beta),
+            ctypes.c_void_p(out)
+        ]
+    )
+
 
 def arith_ln_mul(
         batch : int, n : int, m : int,

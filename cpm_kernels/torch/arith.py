@@ -351,6 +351,71 @@ def ln_mulTH(x : torch.Tensor, alpha : torch.Tensor) -> torch.Tensor:
     """
     return x * alpha[None, :, None]
 
+class OpLnAdd(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x : torch.Tensor, beta : torch.Tensor):
+        assert x.is_cuda and x.is_contiguous() and x.dtype == torch.half
+        assert beta.is_cuda and beta.is_contiguous() and beta.dtype == torch.half
+        assert x.device == beta.device
+        assert x.ndim == 3 and beta.ndim == 1
+        batch, n, m = x.size()
+        assert beta.size(0) == n
+
+        out = torch.empty(x.size(), device=x.device, dtype=torch.half)
+        arith.arith_ln_add(
+            batch, n, m,
+            x.data_ptr(),
+            beta.data_ptr(),
+            out.data_ptr(),
+            torch.cuda.current_stream().cuda_stream
+        )
+        return out
+    
+    @staticmethod
+    def backward(ctx, grad_output : torch.Tensor):
+        assert grad_output.is_cuda and grad_output.is_contiguous() and grad_output.dtype == torch.half
+        assert grad_output.ndim == 3
+        batch, n, m = grad_output.size()
+        
+        grad_beta = torch.empty((n,), device=grad_output.device, dtype=torch.half)
+        arith.arith_ln_add_backward(
+            batch, n, m,
+            grad_output.data_ptr(),
+            grad_beta.data_ptr(),
+            torch.cuda.current_stream().cuda_stream
+        )
+        return grad_output, grad_beta
+
+def ln_add(x : torch.Tensor, beta : torch.Tensor) -> torch.Tensor:
+    """
+    out = x + beta[None, :, None]
+    """
+    return OpLnAdd.apply(x, beta)
+
+def ln_add_inplace(x : torch.Tensor, beta : torch.Tensor) -> None:
+    """
+    x = x + beta[None, :, None]
+    """
+    assert x.is_cuda and x.is_contiguous() and x.dtype == torch.half
+    assert beta.is_cuda and beta.is_contiguous() and beta.dtype == torch.half
+    assert x.device == beta.device
+    assert x.ndim == 3 and beta.ndim == 1
+    batch, n, m = x.size()
+    assert beta.size(0) == n
+
+    arith.arith_ln_add(
+        batch, n, m,
+        x.data_ptr(),
+        beta.data_ptr(),
+        x.data_ptr(),
+        torch.cuda.current_stream().cuda_stream
+    )
+
+def ln_addTH(x : torch.Tensor, beta : torch.Tensor) -> torch.Tensor:
+    """
+    out = x + beta[None, :, None]
+    """
+    return x + beta[None, :, None]
 
 def ln_sub_div(x : torch.Tensor, alpha : torch.Tensor, beta : torch.Tensor) -> torch.Tensor:
     """

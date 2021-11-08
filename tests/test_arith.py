@@ -327,3 +327,43 @@ class TestArith(unittest.TestCase):
                 diff = torch.abs(x - ans).max()
                 self.assertLess(diff, 5e-3)
     
+    def test_ln_add(self):
+        with torch.cuda.device(3):
+            for shape in [
+                (3, 5, 6),
+                (17, 32, 128),
+                (32, 1024, 4096),
+                (33, 777, 1232),
+                (31, 123, 566),
+                (3, 5, 8),
+                (21, 66, 2),
+                (11, 3, 10)
+            ]:
+                x = torch.randn(*shape, device="cuda").half()
+                alpha = (torch.randn(shape[1], device="cuda").half() + 10) / 5
+
+                x1 = x.clone().requires_grad_()
+                alpha1 = alpha.clone().requires_grad_()
+
+                x2 = x.clone().requires_grad_()
+                alpha2 = alpha.clone().requires_grad_()
+
+                out = ct.ln_add(x1, alpha1)
+                ans = ct.ln_addTH(x2, alpha2)
+                diff = torch.abs(out - ans).max()
+                self.assertLess(diff, 5e-3)
+
+                gradient_start = torch.randn_like(out) / shape[0]
+                out.backward(gradient=gradient_start)
+                ans.backward(gradient=gradient_start)
+
+                diff = torch.abs(x1.grad - x2.grad).max()
+                self.assertLess(diff, 5e-2)
+
+                diff = torch.abs(alpha1.grad - alpha2.grad).max()
+                self.assertLess(diff, 5e-2)
+
+                ct.ln_add_inplace(x, alpha)
+                diff = torch.abs(x - ans).max()
+
+                self.assertLess(diff, 5e-3)

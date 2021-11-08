@@ -6,7 +6,8 @@ from .arith import   ln_div, ln_div_inplace, ln_divTH, ln_mul_add, ln_mul_add_in
                     ln_mul_addTH, ln_mul, ln_mul_inplace, ln_mulTH, ln_sub_div, \
                     ln_sub_divTH, ln_sub_div_inplace, element_add, element_add_inplace, \
                     element_addTH, batched_add, batched_add_inplace, batched_addTH, \
-                    element_mul, element_mul_inplace, element_mulTH
+                    element_mul, element_mul_inplace, element_mulTH, \
+                    ln_add, ln_add_inplace, ln_addTH
 from .layernorm import LayerNorm, LayerNormTH, normalize_inplace, normalizeTH
 from .position_embedding import PositionEmbedding, PositionEmbeddingTH
 from .softmax import softmax, softmaxTH, softmax_inplace

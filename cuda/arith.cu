@@ -66,6 +66,22 @@ CPM_KERNEL_EXPORT void cu_arith_batch_add_backward(
     }
 }
 
+// block <batch, n>    thread<min(m, 1024)>,  half m
+CPM_KERNEL_EXPORT void cu_arith_ln_add(
+    int32_t batch, int32_t n, int32_t m,
+    const half2 *x,         // (batch, n, m)
+    const half *beta,      // (n)
+    half2 *out              // (batch, n, m)
+) {
+    int32_t base_x_idx = (blockIdx.x * n + blockIdx.y) * m + threadIdx.x;
+    half2 beta_v = __half2half2(__ldg(beta + blockIdx.y));
+    for (int i = 0; i < m; i += blockDim.x) {
+        if (i + threadIdx.x < m) {
+            out[base_x_idx + i] = __hadd2(x[base_x_idx + i], beta_v);
+        }
+    }
+}
+
 
 // block <batch, n>    thread<min(m, 1024)>,  half m
 CPM_KERNEL_EXPORT void cu_arith_ln_mul_add(
