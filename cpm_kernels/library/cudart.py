@@ -389,6 +389,13 @@ def cudaMallocHost(size : int) -> ctypes.c_void_p:
 def cudaFreeHost(ptr : ctypes.c_void_p) -> None:
     checkCUDAStatus(cuda.cudaFreeHost(ptr))
 
+@cuda.bind("cudaMemGetInfo", [ctypes.POINTER(ctypes.c_size_t), ctypes.POINTER(ctypes.c_size_t)], cudaError_t)
+def cudaMemGetInfo():
+    free = ctypes.c_size_t()
+    total = ctypes.c_size_t()
+    checkCUDAStatus(cuda.cudaMemGetInfo(ctypes.byref(free), ctypes.byref(total)))
+    return free.value, total.value
+
 ### Stream Management
 @cuda.bind("cudaStreamCreate", [ctypes.POINTER(cudaStream_t)], cudaError_t)
 def cudaStreamCreate() -> cudaStream_t:
