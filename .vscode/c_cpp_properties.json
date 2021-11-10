@@ -6,7 +6,7 @@
                 "cuda/includes"
             ],
             "defines": [
-                "__CUDA_ARCH__=600"
+                "__CUDA_ARCH__=610"
             ],
             "compilerPath": "/usr/bin/gcc",
             "cStandard": "gnu17",

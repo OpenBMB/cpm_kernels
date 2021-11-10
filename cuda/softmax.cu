@@ -18,7 +18,7 @@ CPM_KERNEL_EXPORT  void cu_softmax_forward(
         }
     }
 
-    local_max = transposeReduceMax(local_max);
+    local_max = fmaxf(transposeReduceMax(local_max), -1e6);
     
     float local_sum = 0;
     for (int i = 0; i < n; i += WARP_SZ) {
@@ -27,7 +27,7 @@ CPM_KERNEL_EXPORT  void cu_softmax_forward(
         }
     }
 
-    local_sum = transposeReduceSum(local_sum);
+    local_sum = transposeReduceSum(local_sum) + 1e-10;      // avoid nan
     
     for (int i = 0; i < n; i += WARP_SZ) {
         if (col_idx < m && i + threadIdx.y < n) {
@@ -51,7 +51,7 @@ CPM_KERNEL_EXPORT  void cu_softmax_inplace_forward(
         }
     }
 
-    local_max = transposeReduceMax(local_max);
+    local_max = fmaxf(transposeReduceMax(local_max), -1e6);
     
     float local_sum = 0;
     for (int i = 0; i < n; i += WARP_SZ) {
@@ -60,7 +60,7 @@ CPM_KERNEL_EXPORT  void cu_softmax_inplace_forward(
         }
     }
 
-    local_sum = transposeReduceSum(local_sum);
+    local_sum = transposeReduceSum(local_sum) + 1e-10;      // avoid nan
     
     for (int i = 0; i < n; i += WARP_SZ) {
         if (col_idx < m && i + threadIdx.y < n) {
@@ -91,6 +91,51 @@ CPM_KERNEL_EXPORT  void cu_softmax_backward(
     for (int i = 0; i < n; i += WARP_SZ) {
         if (col_idx < m && i + threadIdx.y < n) {
             grad_out[base_mat_idx + i * m] = __float2half((float)__ldg(out + base_mat_idx + i * m) * ((float)__ldg(grad_in + base_mat_idx + i * m) - local_sum ) );
+        }
+    }
+}
+
+// grid <batch>,    thread <min(1024, round_up(n, 32))>
+CPM_KERNEL_EXPORT void cu_softmax_step_inplace(
+    int32_t batch, int32_t n,
+    half *x         // batch, n
+) {
+    int32_t base_x_idx = blockIdx.x * n + threadIdx.x;
+
+    float local_max = -INFINITY;
+    __shared__ float global_max;
+
+    for (int i = 0; i < n; i += blockDim.x) {
+        if (i + threadIdx.x < n) {
+            local_max = fmaxf(local_max, x[base_x_idx + i]);
+        }
+    }
+
+    local_max = blockReduceMax(local_max);
+    if (threadIdx.x == 0) {
+        global_max = fmaxf(local_max, -1e6);
+    }
+    __syncthreads();
+
+    local_max = global_max;
+    float local_sum = 0;
+    __shared__ float global_sum;
+
+    for (int i = 0; i < n; i += blockDim.x) {
+        if (i + threadIdx.x < n) {
+            local_sum += expf((float)x[base_x_idx + i] - local_max);
+        }
+    }
+    local_sum = blockReduceSum(local_sum);
+    if (threadIdx.x == 0) {
+        global_sum = local_sum + 1e-10;      // avoid nan
+    }
+    __syncthreads();
+    local_sum = global_sum;
+
+    for (int i = 0; i < n; i += blockDim.x) {
+        if (i + threadIdx.x < n) {
+            x[base_x_idx + i] = __float2half(expf((float)x[base_x_idx + i] - local_max) / local_sum);
         }
     }
 }

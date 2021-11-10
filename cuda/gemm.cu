@@ -10,10 +10,10 @@ CPM_KERNEL_EXPORT void cu_gemm_round(
     int8_t *out
 ) {
     int32_t base_idx = (blockIdx.x * n + blockIdx.y) * m;   // mat[batch][n][m], scale[batch][n]
-    float local_scale = (float)scale[blockIdx.x * n + blockIdx.y];
+    half local_scale = scale[blockIdx.x * n + blockIdx.y];
 
     for (int32_t i = threadIdx.x; i < m; i += blockDim.x) {
-        out[base_idx + i] = (int8_t)nearbyintf((float)__ldg(mat + base_idx + i) / local_scale); 
+        out[base_idx + i] = (int8_t)nearbyintf((float)(__ldg(mat + base_idx + i) / local_scale)); 
     }
 }
 
@@ -28,7 +28,7 @@ CPM_KERNEL_EXPORT void cu_gemm_round_transpose(
     int32_t base_idx = (blockIdx.x * n + blockIdx.y) * m;   // mat[batch][n][m], scale[batch][m]
 
     for (int32_t i = threadIdx.x; i < m; i += blockDim.x) {
-        out[base_idx + i] = (int8_t)nearbyintf((float)mat[base_idx + i] / (float)__ldg(scale + blockIdx.x * m + i)); 
+        out[base_idx + i] = (int8_t)nearbyintf((float)(mat[base_idx + i] / __ldg(scale + blockIdx.x * m + i)));
     }
 }
 

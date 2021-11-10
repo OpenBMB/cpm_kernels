@@ -1,6 +1,7 @@
 import unittest
 import torch
 import cpm_kernels.torch as ct
+import cpm_kernels.kernels as ck
 
 class TestSoftmax(unittest.TestCase):
     def test_softmax(self):
@@ -47,5 +48,26 @@ class TestSoftmax(unittest.TestCase):
                 x = torch.randn(*shape, device="cuda").half()
                 ans = ct.softmaxTH(x)
                 ct.softmax_inplace(x)
+                diff = (x - ans).abs().max()
+                self.assertLess(diff, 5e-3)
+
+    def test_softmax_step(self):
+        with torch.cuda.device(6):
+            for shape in [
+                (2, 32),
+                (512, 128),
+                (123, 512),
+                (123, 321),
+                (4, 16),
+                (3, 12321)
+            ]:
+                x = torch.randn(*shape, device="cuda").half()
+                ans = torch.softmax(x, dim=1)
+                ck.softmax_step_inplace(
+                    shape[0], shape[1],
+                    x.data_ptr(),
+                    torch.cuda.current_stream().cuda_stream
+                )
+
                 diff = (x - ans).abs().max()
                 self.assertLess(diff, 5e-3)
