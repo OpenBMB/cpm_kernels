@@ -260,6 +260,46 @@ CPM_KERNEL_EXPORT void cu_layernorm_step(
     float local_total_v = 0;
     float local_total_v2 = 0;
     for (int i = threadIdx.x; i < n; i += blockDim.x) {
+        float v =  __ldg(mat + base_mat_idx + i);
+        if (rd_mean) local_total_v += v;
+        local_total_v2 += v * v;
+    }
+
+    __shared__ float global_mean;
+    __shared__ float global_var;
+
+    if (rd_mean) local_total_v = blockReduceSum(local_total_v);
+    local_total_v2 = blockReduceSum(local_total_v2);
+    if (threadIdx.x == 0) {
+        if (rd_mean) {
+            global_mean = local_total_v / (float)n;
+            global_var = local_total_v2 / (float)n - global_mean * global_mean;
+        } else {
+            global_var = local_total_v2 / (float)n;
+            global_mean = 0;
+        }
+    }
+    __syncthreads();
+    local_total_v2 = rsqrtf(global_var + eps);
+    local_total_v = global_mean;
+    
+    for (int i = threadIdx.x; i < n; i += blockDim.x) {
+        out[base_mat_idx + i] = __float2half((__half2float(__ldg(mat + base_mat_idx + i)) - local_total_v) * local_total_v2);
+    }
+}
+
+// block <batch>    thread <min(round_up(n, 32), 1024)>
+CPM_KERNEL_EXPORT void cu_layernorm_step_inplace(
+    int32_t batch, int32_t n,
+    half *mat,    // (batch, n)
+    float eps,
+    bool rd_mean
+) {
+    int32_t base_mat_idx = blockIdx.x * n;
+
+    float local_total_v = 0;
+    float local_total_v2 = 0;
+    for (int i = threadIdx.x; i < n; i += blockDim.x) {
         float v = mat[base_mat_idx + i];
         if (rd_mean) local_total_v += v;
         local_total_v2 += v * v;
@@ -284,6 +324,6 @@ CPM_KERNEL_EXPORT void cu_layernorm_step(
     local_total_v = global_mean;
     
     for (int i = threadIdx.x; i < n; i += blockDim.x) {
-        out[base_mat_idx + i] = __float2half((__half2float(mat[base_mat_idx + i]) - local_total_v) * local_total_v2);
+        mat[base_mat_idx + i] = __float2half((__half2float(mat[base_mat_idx + i]) - local_total_v) * local_total_v2);
     }
 }

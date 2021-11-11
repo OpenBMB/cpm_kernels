@@ -383,7 +383,7 @@ class TestArith(unittest.TestCase):
                 (11 * 3, 10)
             ]:
                 x = torch.randn(*shape, device="cuda").half()
-                alpha = torch.randn(shape[1], device="cuda").half()
+                alpha = (torch.randn(shape[1], device="cuda").half() + 10) / 5
                 beta = torch.randn(shape[1], device="cuda").half()
 
                 ans = x * alpha + beta

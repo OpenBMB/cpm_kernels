@@ -6,8 +6,8 @@ from .mask import mask
 from .arith import arith_batch_add_backward, arith_batch_add_forward, arith_element_add, arith_ln_add_backward, arith_ln_div, arith_ln_mul, \
                     arith_ln_mul_add, arith_ln_mul_backward, arith_ln_sub_div, arith_element_mul, arith_ln_add, \
                     arith_batch_mul, arith_batch_mul_add
-                    
-from .layernorm import layernorm_forward, layernorm_inplace_forward, layernorm_forward_v, layernorm_forward_mv, layernorm_backward_v, layernorm_backward_mv, layernorm_step
+
+from .layernorm import layernorm_forward, layernorm_inplace_forward, layernorm_forward_v, layernorm_forward_mv, layernorm_backward_v, layernorm_backward_mv, layernorm_step, layernorm_step_inplace
 from .position_bucket import position_embedding_init, position_embedding_forward, position_embedding_backward, position_embedding_step
 from .softmax import softmax_forward, softmax_backward, softmax_inplace_forward, softmax_step_inplace
 from .transpose import transpose

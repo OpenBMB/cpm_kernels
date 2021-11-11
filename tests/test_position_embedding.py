@@ -45,7 +45,7 @@ class TestPositionEmbedding(unittest.TestCase):
                 out.backward(gradient=gradient_start)
                 ans.backward(gradient=gradient_start)
                 diff = torch.abs(p1.weight.grad - p2.weight.grad).max()
-                self.assertLess(diff, 1e-4)
+                self.assertLess(diff, 2e-4)
 
     def test_position_embedding_step(self):
         with torch.cuda.device(5):

@@ -145,4 +145,12 @@ class TestLayerNorm(unittest.TestCase):
                     diff = (ans - out).abs().max()
                     self.assertLess(diff, 5e-3)
 
-
+                    ck.layernorm_step_inplace(
+                        128, shape,
+                        x.data_ptr(),
+                        eps,
+                        i < 8,
+                        torch.cuda.current_stream().cuda_stream
+                    )
+                    diff = (ans - x).abs().max()
+                    self.assertLess(diff, 5e-3)

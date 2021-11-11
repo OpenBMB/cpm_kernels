@@ -10,7 +10,8 @@ layernorm_kernel = Kernel(
         "cu_layernorm_forward_mv",
         "cu_layernorm_backward_v",
         "cu_layernorm_backward_mv",
-        "cu_layernorm_step"
+        "cu_layernorm_step",
+        "cu_layernorm_step_inplace"
     ]
 )
 
@@ -164,6 +165,25 @@ def layernorm_step(
             ctypes.c_int32(n),
             ctypes.c_void_p(mat),
             ctypes.c_void_p(out),
+            ctypes.c_float(eps),
+            ctypes.c_bool(rd_mean)
+        ]
+    )
+
+def layernorm_step_inplace(
+        batch : int, n : int,
+        mat : DevicePointer,        # (batch, n)    fp16
+        eps : float,
+        rd_mean : bool,
+        stream : CUDAStream
+    ):
+    gridDim = (batch, 1, 1)
+    blockDim = (min(1024, round_up(n, 32)), 1, 1)
+    layernorm_kernel.cu_layernorm_step_inplace(
+        gridDim, blockDim, 0, stream, [
+            ctypes.c_int32(batch),
+            ctypes.c_int32(n),
+            ctypes.c_void_p(mat),
             ctypes.c_float(eps),
             ctypes.c_bool(rd_mean)
         ]
