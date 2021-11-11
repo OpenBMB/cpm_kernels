@@ -51,8 +51,8 @@ class TestGemv(unittest.TestCase):
             for _ in range(10):
                 BATCH = 16
                 N = 2222
-                M = 2416
-                ssk = math.sqrt(math.sqrt(N))
+                M = 128
+                ssk = math.sqrt(math.sqrt(M))
                 mat = torch.randn(BATCH, N, M, dtype=torch.half, device="cuda") / ssk
                 vec = torch.randn(BATCH, M, 2, dtype=torch.half, device="cuda") / ssk
                 vec_0 = vec[:, :, 0].clone()
@@ -67,6 +67,31 @@ class TestGemv(unittest.TestCase):
                 )
 
                 ans = ct.bmm( mat, False, vec, False , int8=False)[:, :, 0]
+
+                diff = torch.abs(ans - out).max()
+                self.assertLess(diff, 0.1)
+
+    def test_gemv_fp16_transpose(self):
+        with torch.cuda.device(2):
+            for _ in range(10):
+                BATCH = 16
+                N = 128
+                M = 2222
+                ssk = math.sqrt(math.sqrt(M))
+                mat = torch.randn(BATCH, M, N, dtype=torch.half, device="cuda") / ssk
+                vec = torch.randn(BATCH, M, 2, dtype=torch.half, device="cuda") / ssk
+                vec_0 = vec[:, :, 0].clone()
+
+                out = torch.zeros(BATCH, N, dtype=torch.half, device="cuda")
+                ck.gemv_fp16_transpose(
+                    BATCH, N, M,
+                    mat.data_ptr(),
+                    vec_0.data_ptr(),
+                    out.data_ptr(),
+                    torch.cuda.current_stream().cuda_stream
+                )
+
+                ans = ct.bmm( mat, True, vec, False , int8=False)[:, :, 0]
 
                 diff = torch.abs(ans - out).max()
                 self.assertLess(diff, 0.1)

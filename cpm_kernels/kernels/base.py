@@ -18,6 +18,8 @@ class KernelFunction:
     
     def __call__(self, gridDim : Tuple[int, int, int], blockDim : Tuple[int, int, int], 
             sharedMemBytes : int, stream : cudart.cudaStream_t, params : List[Any] ) -> None:
+        assert len(gridDim) == 3
+        assert len(blockDim) == 3
         curr_device = cudart.cudaGetDevice()
         func = self._funcs[curr_device]
         cudart.cudaSetDevice(curr_device)   # pytorch ctx changed

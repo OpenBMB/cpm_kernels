@@ -1,4 +1,5 @@
 import cpm_kernels.torch as ct
+import cpm_kernels.kernels as ck
 import torch
 import unittest
 
@@ -43,5 +44,25 @@ class TestEmbedding(unittest.TestCase):
                 diff = torch.abs(cpm_emb.weight.grad - pth_emb.weight.grad).max()
                 self.assertLess(diff, 1e-3)
                 
+    def test_embedding_step(self):
+        with torch.cuda.device(0):
+            for args in TEST_CASE:
+                vocab_size, hidden_size, batch, _ = args
+                weight = torch.randn(vocab_size, hidden_size, dtype=torch.half, device="cuda")
+                ipt = torch.randint(0, vocab_size, (batch,), dtype=torch.long).to("cuda")
 
+                ans = torch.embedding(
+                    weight,
+                    ipt
+                )
+                out = torch.empty((batch, hidden_size), dtype=torch.half, device="cuda")
+                ck.embedding_step(
+                    batch, hidden_size,
+                    ipt.to(torch.int32).data_ptr(),
+                    weight.data_ptr(),
+                    out.data_ptr(),
+                    torch.cuda.current_stream().cuda_stream
+                )
+                diff = torch.abs(out - ans).max()
+                self.assertLess(diff, 1e-5)
                 

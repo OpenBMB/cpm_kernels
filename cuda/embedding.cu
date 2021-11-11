@@ -84,3 +84,20 @@ CPM_KERNEL_EXPORT void cu_embedding_backward_stage2(
         }
     }
 }
+
+
+// block <batch>,   thread <min(1024, n)>
+CPM_KERNEL_EXPORT void cu_embedding_step(
+    int32_t batch, int32_t n,
+    const int32_t *ids,     // (batch)
+    const half *weights,    // (vocab_size, n)
+    half *out               // (batch, n)
+) {
+    int32_t id = ids[blockIdx.x];
+    const half *base_weight = weights + id * n;
+    half *base_out = out + blockIdx.x * n;
+
+    for (int i = threadIdx.x; i < n; i += blockDim.x) {
+        base_out[i] = __ldg(base_weight + i);
+    }
+}

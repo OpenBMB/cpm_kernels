@@ -6,7 +6,8 @@ embedding_kernel = Kernel(
     [
         "cu_embedding_forward",
         "cu_embedding_backward_stage1",
-        "cu_embedding_backward_stage2"
+        "cu_embedding_backward_stage2",
+        "cu_embedding_step"
     ]
 )
 
@@ -81,5 +82,24 @@ def embedding_backward_stage2(
             ctypes.c_void_p(aux_grad),
             ctypes.c_void_p(aux_grad_idx),
             ctypes.c_void_p(grad)
+        ]
+    )
+
+def embedding_step(
+        batch : int, embedding_size : int,
+        ids : DevicePointer,            # (batch,)  int32
+        weights : DevicePointer,        # (vocab_size, embedding_size)  fp16
+        out : DevicePointer,            # (batch, embedding_size)  fp16
+        stream : CUDAStream
+    ):
+    gridDim = (batch, 1, 1)
+    blockDim = (min(1024, embedding_size), 1, 1)
+    embedding_kernel.cu_embedding_step(
+        gridDim, blockDim, 0, stream, [
+            ctypes.c_int32(batch),
+            ctypes.c_int32(embedding_size),
+            ctypes.c_void_p(ids),
+            ctypes.c_void_p(weights),
+            ctypes.c_void_p(out)
         ]
     )

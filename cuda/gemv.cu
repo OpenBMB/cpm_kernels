@@ -101,3 +101,32 @@ CPM_KERNEL_EXPORT void cu_gemv_fp16(
     }
 }
 
+// block <batch, dim_out // WARP_SZ>,   thread <WARP_SZ, WARP_SZ>
+CPM_KERNEL_EXPORT void cu_gemv_fp16_transpose(
+    int32_t batch, int32_t dim_out, int32_t dim_in,
+    const half *mat,                   //  <batch, dim_in, dim_out>
+    const half *vec,                   //  <batch, dim_in>
+    half *out                          //  <batch, dim_out>
+) {
+    int32_t col = blockIdx.y * WARP_SZ + threadIdx.x;
+    int32_t base_idx = blockIdx.x * dim_in + threadIdx.y;
+    float sum = 0;
+    for (int i = 0; i < dim_in; i += WARP_SZ * WARP_SZ) { // warp * warp blocks
+        float local_sum = 0;
+        for (int j = 0; j < WARP_SZ * WARP_SZ && i + j < dim_in; j += WARP_SZ) {    // warp block
+            float v = 0;
+            if (i + j + threadIdx.y < dim_in && col < dim_out) v = __ldg(vec + base_idx + i + j) * mat[(base_idx + i + j) * dim_out + col];
+            v = transposeReduceSum(v);
+            if (threadIdx.y * WARP_SZ == j) {
+                local_sum = v;
+            }
+        }
+        local_sum = transposeReduceSum(local_sum);
+        sum += local_sum;
+    }
+    
+    if (threadIdx.y == 0 && col < dim_out) {
+        out[blockIdx.x * dim_out + col] = sum;
+    }
+}
+
