@@ -15,6 +15,8 @@ arith_kernel = Kernel(
         "cu_arith_ln_sub_div",
         "cu_arith_ln_mul_backward",
         "cu_arith_ln_add_backward",
+        "cu_arith_batch_mul_add",
+        "cu_arith_batch_mul"
     ]
 )
 
@@ -275,3 +277,48 @@ def arith_ln_add_backward(
             ctypes.c_void_p(grad)
         ]
     )
+
+def arith_batch_mul_add(
+    batch : int, n : int,
+    x : DevicePointer,      # (batch, n)
+    alpha : DevicePointer,  # (n)
+    beta : DevicePointer,   # (n)
+    out : DevicePointer,    # (batch, n)
+    stream : CUDAStream
+):
+    assert n % 2 == 0
+    n = n // 2
+    gridDim = (batch, 1, 1)
+    blockDim = (min(n, 1024), 1, 1)
+    arith_kernel.cu_arith_batch_mul_add(
+        gridDim, blockDim, 0, stream, [
+            ctypes.c_int32(batch),
+            ctypes.c_int32(n),
+            ctypes.c_void_p(x),
+            ctypes.c_void_p(alpha),
+            ctypes.c_void_p(beta),
+            ctypes.c_void_p(out)
+        ]
+    )
+
+def arith_batch_mul(
+    batch : int, n : int,
+    x : DevicePointer,      # (batch, n)
+    alpha : DevicePointer,  # (n)
+    out : DevicePointer,    # (batch, n)
+    stream : CUDAStream
+):
+    assert n % 2 == 0
+    n = n // 2
+    gridDim = (batch, 1, 1)
+    blockDim = (min(n, 1024), 1, 1)
+    arith_kernel.cu_arith_batch_mul(
+        gridDim, blockDim, 0, stream, [
+            ctypes.c_int32(batch),
+            ctypes.c_int32(n),
+            ctypes.c_void_p(x),
+            ctypes.c_void_p(alpha),
+            ctypes.c_void_p(out)
+        ]
+    )
+

@@ -100,3 +100,34 @@ CPM_KERNEL_EXPORT void cu_position_embedding_backward(
         grad[ threadIdx.x * num_buckets + blockIdx.x ] = sum[threadIdx.x];
     }
 }
+
+// block <1>    <min(key_len, 1024)>
+CPM_KERNEL_EXPORT void cu_position_embedding_step(
+    int32_t query_pos,
+    int32_t key_len,
+    int32_t num_buckets,
+    int32_t max_distance,
+    int32_t num_head,
+    const int32_t *position_mapping,    // (max_distance)
+    const half *weight,                 // (num_head, num_bucket)
+    half *out,                          // (num_head, key_len)
+    bool bidirectional
+) {
+    for (int i = threadIdx.x; i < key_len; i += blockDim.x) {
+        int32_t relative_position = query_pos - i;
+        int32_t bucket_offset = 0;
+        if (relative_position < 0) {
+            if (bidirectional) {
+                relative_position = -relative_position;
+                bucket_offset = num_buckets / 2;
+            } else {
+                relative_position = 0;
+            }
+        }
+        if (relative_position >= max_distance) relative_position = max_distance - 1;
+        int32_t bucket = __ldg(position_mapping + relative_position) + bucket_offset;
+        for (int j = 0; j < num_head; j++){
+            out[j * key_len + i] = __ldg(weight + j * num_buckets + bucket);
+        }
+    }
+}

@@ -93,7 +93,7 @@ CPM_KERNEL_EXPORT void cu_gemv_fp16(
         for (int i = 0; (i + threadIdx.x) * 2 < dim_in; i += blockDim.x) {
             sum = __hfma2(__ldg(vec + base_v + i), mat[base_mat + i], sum);
         }
-        float v = sum.x + sum.y;
+        float v = (float)sum.x + (float)sum.y;
         v = blockReduceSum(v);
         if (threadIdx.x == 0) {
             out[blockIdx.x * dim_out + j] = __float2half(v);
@@ -115,7 +115,7 @@ CPM_KERNEL_EXPORT void cu_gemv_fp16_transpose(
         float local_sum = 0;
         for (int j = 0; j < WARP_SZ * WARP_SZ && i + j < dim_in; j += WARP_SZ) {    // warp block
             float v = 0;
-            if (i + j + threadIdx.y < dim_in && col < dim_out) v = __ldg(vec + base_idx + i + j) * mat[(base_idx + i + j) * dim_out + col];
+            if (i + j + threadIdx.y < dim_in && col < dim_out) v = (float)__ldg(vec + base_idx + i + j) * (float)mat[(base_idx + i + j) * dim_out + col];
             v = transposeReduceSum(v);
             if (threadIdx.y * WARP_SZ == j) {
                 local_sum = v;
@@ -130,3 +130,28 @@ CPM_KERNEL_EXPORT void cu_gemv_fp16_transpose(
     }
 }
 
+// block <batch>,   thread <min(1024, round_up(dim_in // 2, 32))>
+CPM_KERNEL_EXPORT void cu_gemv_broadcast_mat_fp16(
+    int32_t batch, int32_t dim_out, int32_t dim_in,
+    const half2 *mat,                  //  <dim_out, dim_in>
+    const half2 *vec,                  //  <batch, dim_in>
+    half *out                          //  <batch, dim_out>
+) {
+    int32_t half_dim_in = dim_in >> 1;
+    int32_t base_vec_idx = blockIdx.x * half_dim_in + threadIdx.x;
+
+    for (int j = 0; j < dim_out; j ++) {
+        int32_t base_mat = j * half_dim_in + threadIdx.x;
+        half2 sum = __float2half2_rn(0);
+        for (int i = 0; i < half_dim_in; i += blockDim.x) {
+            if (i + threadIdx.x < half_dim_in) {
+                sum = __hfma2(__ldg(vec + base_vec_idx + i), mat[base_mat + i], sum);
+            }
+        }
+        float v = (float)sum.x + (float)sum.y;
+        v = blockReduceSum(v);
+        if (threadIdx.x == 0) {
+            out[blockIdx.x * dim_out + j] = __float2half(v);
+        }
+    }
+}

@@ -1,6 +1,19 @@
 import cpm_kernels.torch as ct
+import cpm_kernels.kernels as ck
 import torch
 import unittest
+
+def normalize_stepTH(x : torch.Tensor, eps : float, rd_mean : bool) -> torch.Tensor:
+    old_dtype = x.dtype
+    x = x.to(torch.float32)
+    var = (x**2).mean(axis=-1, keepdim=True)
+    if rd_mean:
+        mean = x.mean(axis=-1, keepdim=True)
+        var = var - (mean**2)
+        x = (x - mean) * torch.rsqrt(var + eps)
+    else:
+        x = x * torch.rsqrt(var + eps)
+    return x.to(old_dtype)
 
 class TestLayerNorm(unittest.TestCase):
     def test_layernorm_unbias(self):
@@ -107,3 +120,29 @@ class TestLayerNorm(unittest.TestCase):
 
                     diff = (ans - x).abs().max()
                     self.assertLess(diff, 5e-3)
+    
+    def test_normalize_step(self):
+        with torch.cuda.device(4):
+            for shape, eps in [
+                (768, 1e-5),
+                (768, 1e-6),
+                (1024, 1e-3),
+                (1024, 1e-6)
+            ]:
+                for i in range(16):
+                    x = torch.randn((128, shape), device="cuda").half()
+                    ans = normalize_stepTH(x, eps, i < 8)
+                    out = torch.empty(128, shape, device="cuda", dtype=torch.half)
+                    ck.layernorm_step(
+                        128, shape,
+                        x.data_ptr(),
+                        out.data_ptr(),
+                        eps,
+                        i < 8,
+                        torch.cuda.current_stream().cuda_stream
+                    )
+
+                    diff = (ans - out).abs().max()
+                    self.assertLess(diff, 5e-3)
+
+

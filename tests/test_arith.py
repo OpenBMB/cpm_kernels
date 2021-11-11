@@ -1,4 +1,6 @@
+from torch.cuda import current_stream
 import cpm_kernels.torch as ct
+import cpm_kernels.kernels as ck
 import torch
 import unittest
 
@@ -366,4 +368,60 @@ class TestArith(unittest.TestCase):
                 ct.ln_add_inplace(x, alpha)
                 diff = torch.abs(x - ans).max()
 
+                self.assertLess(diff, 5e-3)
+    
+    def test_batched_mul_add(self):
+        with torch.cuda.device(3):
+            for shape in [
+                (3 * 5, 6),
+                (17 * 32, 128),
+                (32 * 1024, 4096),
+                (33 * 777, 1232),
+                (31 * 123, 566),
+                (3 * 5, 8),
+                (21 * 66, 2),
+                (11 * 3, 10)
+            ]:
+                x = torch.randn(*shape, device="cuda").half()
+                alpha = torch.randn(shape[1], device="cuda").half()
+                beta = torch.randn(shape[1], device="cuda").half()
+
+                ans = x * alpha + beta
+                out = torch.empty( shape, dtype=torch.half, device="cuda")
+                ck.arith_batch_mul_add(
+                    shape[0], shape[1],
+                    x.data_ptr(),
+                    alpha.data_ptr(),
+                    beta.data_ptr(),
+                    out.data_ptr(),
+                    torch.cuda.current_stream().cuda_stream
+                )
+                diff = torch.abs(out - ans).max()
+                self.assertLess(diff, 1e-2)
+    
+    def test_batched_mul(self):
+        with torch.cuda.device(3):
+            for shape in [
+                (3 * 5, 6),
+                (17 * 32, 128),
+                (32 * 1024, 4096),
+                (33 * 777, 1232),
+                (31 * 123, 566),
+                (3 * 5, 8),
+                (21 * 66, 2),
+                (11 * 3, 10)
+            ]:
+                x = torch.randn(*shape, device="cuda").half()
+                alpha = torch.randn(shape[1], device="cuda").half()
+
+                ans = x * alpha
+                out = torch.empty( shape, dtype=torch.half, device="cuda")
+                ck.arith_batch_mul(
+                    shape[0], shape[1],
+                    x.data_ptr(),
+                    alpha.data_ptr(),
+                    out.data_ptr(),
+                    torch.cuda.current_stream().cuda_stream
+                )
+                diff = torch.abs(out - ans).max()
                 self.assertLess(diff, 5e-3)

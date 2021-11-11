@@ -1,4 +1,5 @@
 import cpm_kernels.torch as ct
+import cpm_kernels.kernels as ck
 import torch
 import unittest
 
@@ -46,4 +47,32 @@ class TestPositionEmbedding(unittest.TestCase):
                 diff = torch.abs(p1.weight.grad - p2.weight.grad).max()
                 self.assertLess(diff, 1e-4)
 
-                
+    def test_position_embedding_step(self):
+        with torch.cuda.device(5):
+            for num_buckets, num_heads, max_distance, bidi in TEST_CASE:
+                weight = torch.randn(num_heads, num_buckets, device="cuda", dtype=torch.half)
+                p2 = ct.PositionEmbeddingTH(num_heads, num_buckets, max_distance, bidi)
+                p2.load_state_dict({"weight": weight })
+                p2 = p2.cuda().half()
+
+                ans = p2(128, 128)
+
+                mapping = torch.empty(max_distance, dtype=torch.int32, device="cuda")
+                ck.position_embedding_init(
+                    num_buckets, max_distance, 
+                    mapping.data_ptr(),
+                    bidi,
+                    torch.cuda.current_stream().cuda_stream
+                )
+                for i in range(128):
+                    out = torch.empty(num_heads, 128, dtype=torch.half, device="cuda")
+                    ck.position_embedding_step(
+                        i, 128, num_buckets, max_distance, num_heads,
+                        mapping.data_ptr(),
+                        weight.data_ptr(),
+                        out.data_ptr(),
+                        bidi,
+                        torch.cuda.current_stream().cuda_stream
+                    )
+                    diff = torch.abs(out - ans[:, :, i]).max()
+                    self.assertLess(diff, 1e-4)

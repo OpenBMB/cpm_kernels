@@ -219,3 +219,34 @@ CPM_KERNEL_EXPORT void cu_arith_ln_add_backward(
 }
 
 
+
+// block <batch>    thread<min(n, 1024)>,  half n
+CPM_KERNEL_EXPORT void cu_arith_batch_mul_add(
+    int32_t batch, int32_t n,
+    const half2 *x,         // (batch, n)
+    const half2 *alpha,     // (n) 
+    const half2 *beta,      // (n)
+    half2 *out              // (batch, n)
+) {
+    const half2 *base_x = x + blockIdx.x * n;
+    half2 *base_out = out + blockIdx.x * n;
+
+    for (int i = threadIdx.x; i < n; i += blockDim.x) {
+        base_out[i] = __hfma2(base_x[i], __ldg(alpha + i), __ldg(beta + i));
+    }
+}
+
+// block <batch>    thread<min(n, 1024)>,  half n
+CPM_KERNEL_EXPORT void cu_arith_batch_mul(
+    int32_t batch, int32_t n,
+    const half2 *x,         // (batch, n)
+    const half2 *alpha,     // (n) 
+    half2 *out              // (batch, n)
+) {
+    const half2 *base_x = x + blockIdx.x * n;
+    half2 *base_out = out + blockIdx.x * n;
+
+    for (int i = threadIdx.x; i < n; i += blockDim.x) {
+        base_out[i] = __hmul2(base_x[i], __ldg(alpha + i));
+    }
+}

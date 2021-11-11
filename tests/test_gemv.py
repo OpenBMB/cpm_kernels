@@ -12,7 +12,7 @@ class TestGemv(unittest.TestCase):
                 BATCH = 16
                 N = 4444
                 M = 8888
-                ssk = math.sqrt(math.sqrt(N))
+                ssk = math.sqrt(math.sqrt(M))
                 mat = torch.randn(N, M, dtype=torch.half, device="cuda") / ssk
                 vec = torch.randn(BATCH, M, dtype=torch.half, device="cuda") / ssk
 
@@ -95,3 +95,28 @@ class TestGemv(unittest.TestCase):
 
                 diff = torch.abs(ans - out).max()
                 self.assertLess(diff, 0.1)
+
+    def test_gemv_logits(self):
+        with torch.cuda.device(2):
+            for _ in range(10):
+                BATCH = 16
+                N = 22222
+                M = 4444
+                ssk = math.sqrt(math.sqrt(M))
+                mat = torch.randn(N, M, dtype=torch.half, device="cuda") / ssk
+                vec = torch.randn(BATCH, M, dtype=torch.half, device="cuda") / ssk
+
+            
+                out = torch.empty(BATCH, N, dtype=torch.half, device="cuda")
+                ck.gemv_broadcast_mat_fp16(
+                    BATCH, N, M,
+                    mat.data_ptr(),
+                    vec.data_ptr(),
+                    out.data_ptr(),
+                    torch.cuda.current_stream().cuda_stream
+                )
+
+                ans = ct.bmm( vec.unsqueeze(0), False, mat.unsqueeze(0), True , int8=False)
+
+                diff = torch.abs(ans - out).max()
+                self.assertLess(diff, 5e-2)
