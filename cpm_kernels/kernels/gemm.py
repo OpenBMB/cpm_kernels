@@ -267,9 +267,9 @@ def gemm_backward_round_scale(
 
 def gemm_backward_scale_round(
         batch : int, n : int, m : int,
-        mat : DevicePointer,        # (batch, n, m) int8
+        mat : DevicePointer,        # (batch, n, m) fp16
         scale_x : DevicePointer,    # (batch, n)    fp16
-        out : DevicePointer,        # (batch, n, m) fp16
+        out : DevicePointer,        # (batch, n, m) int8
         scale_y : DevicePointer,    # (batch, m)    fp16
         broad_cast_x : bool,
         stream : CUDAStream
