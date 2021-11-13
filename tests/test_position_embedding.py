@@ -30,8 +30,7 @@ class TestPositionEmbedding(unittest.TestCase):
                 out = p1(128, 128)
                 ans = p2(128, 128)
 
-                diff = torch.abs(out - ans).max()
-                self.assertLess(diff, 1e-5)
+                self.assertTrue(torch.isclose(out, ans, 1e-4, 1e-4).all())
 
                 gradient_start = torch.randn(out.size(), device="cuda").half()
                 if not bidi:
@@ -44,8 +43,7 @@ class TestPositionEmbedding(unittest.TestCase):
 
                 out.backward(gradient=gradient_start)
                 ans.backward(gradient=gradient_start)
-                diff = torch.abs(p1.weight.grad - p2.weight.grad).max()
-                self.assertLess(diff, 2e-4)
+                self.assertTrue(torch.isclose(p1.weight.grad, p2.weight.grad, 1e-3, 1e-3).all())
 
     def test_position_embedding_step(self):
         with torch.cuda.device(5):
@@ -74,5 +72,4 @@ class TestPositionEmbedding(unittest.TestCase):
                         bidi,
                         torch.cuda.current_stream().cuda_stream
                     )
-                    diff = torch.abs(out - ans[:, :, i]).max()
-                    self.assertLess(diff, 1e-4)
+                    self.assertTrue(torch.isclose(out, ans[:, :, i], 1e-4, 1e-4).all())

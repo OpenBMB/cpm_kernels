@@ -32,8 +32,9 @@ def arith_element_add(
     """
     assert n % 2 == 0
     n = n // 2
-    gridDim = (batch, 1, 1)
-    blockDim = (min(n, 1024), 1, 1)
+    threads = min(round_up(n, 32), 1024)
+    gridDim = (batch, round_up(n, threads) // threads, 1)
+    blockDim = (threads, 1, 1)
     arith_kernel.cu_arith_element_add(
         gridDim, blockDim, 0, stream, [
             ctypes.c_int32(batch),
@@ -56,8 +57,9 @@ def arith_element_mul(
     """
     assert n % 2 == 0
     n = n // 2
-    gridDim = (batch, 1, 1)
-    blockDim = (min(n, 1024), 1, 1)
+    threads = min(round_up(n, 32), 1024)
+    gridDim = (batch, round_up(n, threads) // threads, 1)
+    blockDim = (threads, 1, 1)
     arith_kernel.cu_arith_element_mul(
         gridDim, blockDim, 0, stream, [
             ctypes.c_int32(batch),
@@ -80,8 +82,9 @@ def arith_batch_add_forward(
     """
     assert n % 2 == 0
     n = n // 2
-    gridDim = (batch, 1, 1)
-    blockDim = (min(n, 1024), 1, 1)
+    threads = min(round_up(n, 32), 1024)
+    gridDim = (batch, round_up(n, threads) // threads, 1)
+    blockDim = (threads, 1, 1)
     arith_kernel.cu_arith_batch_add_forward(
         gridDim, blockDim, 0, stream, [
             ctypes.c_int32(batch),
@@ -122,8 +125,9 @@ def arith_ln_mul_add(
     """
     assert m % 2 == 0
     m = m // 2
-    gridDim = (batch, n, 1)
-    blockDim = (min(m, 1024), 1, 1)
+    threads = min(round_up(m, 32), 1024)
+    gridDim = (batch, n, round_up(m, threads) // threads)
+    blockDim = (threads, 1, 1)
     arith_kernel.cu_arith_ln_mul_add(
         gridDim, blockDim, 0, stream, [
             ctypes.c_int32(batch),
@@ -148,8 +152,9 @@ def arith_ln_add(
     """
     assert m % 2 == 0
     m = m // 2
-    gridDim = (batch, n, 1)
-    blockDim = (min(m, 1024), 1, 1)
+    threads = min(round_up(m, 32), 1024)
+    gridDim = (batch, n, round_up(m, threads) // threads)
+    blockDim = (threads, 1, 1)
     arith_kernel.cu_arith_ln_add(
         gridDim, blockDim, 0, stream, [
             ctypes.c_int32(batch),
@@ -174,8 +179,9 @@ def arith_ln_mul(
     """
     assert m % 2 == 0
     m = m // 2
-    gridDim = (batch, n, 1)
-    blockDim = (min(m, 1024), 1, 1)
+    threads = min(round_up(m, 32), 1024)
+    gridDim = (batch, n, round_up(m, threads) // threads)
+    blockDim = (threads, 1, 1)
     arith_kernel.cu_arith_ln_mul(
         gridDim, blockDim, 0, stream, [
             ctypes.c_int32(batch),
@@ -199,8 +205,9 @@ def arith_ln_div(
     """
     assert m % 2 == 0
     m = m // 2
-    gridDim = (batch, n, 1)
-    blockDim = (min(m, 1024), 1, 1)
+    threads = min(round_up(m, 32), 1024)
+    gridDim = (batch, n, round_up(m, threads) // threads)
+    blockDim = (threads, 1, 1)
     arith_kernel.cu_arith_ln_div(
         gridDim, blockDim, 0, stream, [
             ctypes.c_int32(batch),
@@ -225,8 +232,9 @@ def arith_ln_sub_div(
     """
     assert m % 2 == 0
     m = m // 2
-    gridDim = (batch, n, 1)
-    blockDim = (min(m, 1024), 1, 1)
+    threads = min(round_up(m, 32), 1024)
+    gridDim = (batch, n, round_up(m, threads) // threads)
+    blockDim = (threads, 1, 1)
     arith_kernel.cu_arith_ln_sub_div(
         gridDim, blockDim, 0, stream, [
             ctypes.c_int32(batch),
@@ -288,8 +296,9 @@ def arith_batch_mul_add(
 ):
     assert n % 2 == 0
     n = n // 2
-    gridDim = (batch, 1, 1)
-    blockDim = (min(n, 1024), 1, 1)
+    threads = min(round_up(n, 32), 1024)
+    gridDim = (batch, round_up(n, threads) // threads, 1)
+    blockDim = (threads, 1, 1)
     arith_kernel.cu_arith_batch_mul_add(
         gridDim, blockDim, 0, stream, [
             ctypes.c_int32(batch),
@@ -310,8 +319,9 @@ def arith_batch_mul(
 ):
     assert n % 2 == 0
     n = n // 2
-    gridDim = (batch, 1, 1)
-    blockDim = (min(n, 1024), 1, 1)
+    threads = min(round_up(n, 32), 1024)
+    gridDim = (batch, round_up(n, threads) // threads, 1)
+    blockDim = (threads, 1, 1)
     arith_kernel.cu_arith_batch_mul(
         gridDim, blockDim, 0, stream, [
             ctypes.c_int32(batch),

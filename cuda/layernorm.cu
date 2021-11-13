@@ -15,19 +15,39 @@ CPM_KERNEL_EXPORT void cu_layernorm_forward(
 
     float local_total_v = 0.0;
     float local_total_v2 = 0.0;
-    for (int i = 0; i < n; i += WARP_SZ) {
-        float v = 0;
-        if (col_idx < m && i + threadIdx.y < n) {
-            v = (float)__ldg(mat + base_mat_idx + i * m);
+
+    // nested reduce loops to achieve higher precision
+    for (int i = 0; i < n; i += WARP_SZ * WARP_SZ) {
+        
+        // inner loop reduce
+        float inner_v = 0.0;
+        float inner_v2 = 0.0;
+        for (int j = 0; j < WARP_SZ * WARP_SZ && i + j < n; j += WARP_SZ) {
+            // reduce per block
+            float v = 0, tv = 0, tv2 = 0;
+            if (col_idx < m && i + j + threadIdx.y < n) {
+                v = (float)mat[base_mat_idx + (i + j) * m];
+            }
+            if (rd_mean) {
+                tv = transposeReduceSum(v);
+            }
+            tv2 = transposeReduceSum(v * v);
+            if (threadIdx.y * WARP_SZ == j) {
+                inner_v = tv;
+                inner_v2 = tv2;
+            }
         }
 
-        if (rd_mean) local_total_v += v;
-        local_total_v2 += v * v;
+        // outter loop reduce, reduce per 32 blocks
+        if (rd_mean) {
+            local_total_v += transposeReduceSum(inner_v);
+        }
+        local_total_v2 += transposeReduceSum(inner_v2);
     }
 
-    local_total_v2 = transposeReduceSum(local_total_v2) / (float)n;
+    local_total_v2 = local_total_v2 / (float)n;
     if (rd_mean) {
-        local_total_v = transposeReduceSum(local_total_v) / (float)n;
+        local_total_v = local_total_v / (float)n;
         local_total_v2 -= local_total_v * local_total_v;
     }
 
@@ -38,19 +58,20 @@ CPM_KERNEL_EXPORT void cu_layernorm_forward(
     if (rd_mean) {
         for (int i = 0; i < n; i += WARP_SZ) {
             if (col_idx < m && i + threadIdx.y < n) {
-                out[base_mat_idx + i * m] = __float2half(((float)__ldg(mat + base_mat_idx + i * m) - local_mean) * local_var);
+                out[base_mat_idx + i * m] = __float2half(((float)mat[base_mat_idx + i * m] - local_mean) * local_var);
             }
         }
     } else {
         for (int i = 0; i < n; i += blockDim.y) {
             if (col_idx < m && i + threadIdx.y < n) {
-                out[base_mat_idx + i * m] = __float2half((float)__ldg(mat + base_mat_idx + i * m) * local_var);
+                out[base_mat_idx + i * m] = __float2half((float)mat[base_mat_idx + i * m] * local_var);
             }
         }
     }
 }
 
 // block <batch_idx, m/32>   thread <32, 32>
+// WARNING: this function is the same as cu_layernorm_forward now.
 CPM_KERNEL_EXPORT void cu_layernorm_inplace_forward(
     int32_t batch, int32_t n, int32_t m,
     half *mat,    // (batch, n, m)
@@ -62,19 +83,39 @@ CPM_KERNEL_EXPORT void cu_layernorm_inplace_forward(
 
     float local_total_v = 0.0;
     float local_total_v2 = 0.0;
-    for (int i = 0; i < n; i += WARP_SZ) {
-        float v = 0;
-        if (col_idx < m && i + threadIdx.y < n) {
-            v = (float)(mat[base_mat_idx + i * m]);
+
+    // nested reduce loops to achieve higher precision
+    for (int i = 0; i < n; i += WARP_SZ * WARP_SZ) {
+        
+        // inner loop reduce
+        float inner_v = 0.0;
+        float inner_v2 = 0.0;
+        for (int j = 0; j < WARP_SZ * WARP_SZ && i + j < n; j += WARP_SZ) {
+            // reduce per block
+            float v = 0, tv = 0, tv2 = 0;
+            if (col_idx < m && i + j + threadIdx.y < n) {
+                v = (float)mat[base_mat_idx + (i + j) * m];
+            }
+            if (rd_mean) {
+                tv = transposeReduceSum(v);
+            }
+            tv2 = transposeReduceSum(v * v);
+            if (threadIdx.y * WARP_SZ == j) {
+                inner_v = tv;
+                inner_v2 = tv2;
+            }
         }
 
-        if (rd_mean) local_total_v += v;
-        local_total_v2 += v * v;
+        // outter loop reduce, reduce per 32 blocks
+        if (rd_mean) {
+            local_total_v += transposeReduceSum(inner_v);
+        }
+        local_total_v2 += transposeReduceSum(inner_v2);
     }
 
-    local_total_v2 = transposeReduceSum(local_total_v2) / (float)n;
+    local_total_v2 = local_total_v2 / (float)n;
     if (rd_mean) {
-        local_total_v = transposeReduceSum(local_total_v) / (float)n;
+        local_total_v = local_total_v / (float)n;
         local_total_v2 -= local_total_v * local_total_v;
     }
 
@@ -109,20 +150,35 @@ CPM_KERNEL_EXPORT void cu_layernorm_forward_v(
     int32_t col_idx = blockIdx.y * WARP_SZ + threadIdx.x;
 
     float local_total_v2 = 0.0;
-    for (int i = 0; i < n; i += WARP_SZ) {
-        float v = 0;
-        if (col_idx < m && i + threadIdx.y < n) {
-            v = (float)__ldg(mat + base_mat_idx + i * m);
+
+    // nested reduce loops to achieve higher precision
+    for (int i = 0; i < n; i += WARP_SZ * WARP_SZ) {
+        
+        // inner loop reduce
+        float inner_v2 = 0.0;
+        for (int j = 0; j < WARP_SZ * WARP_SZ && i + j < n; j += WARP_SZ) {
+            // reduce per block
+            float v = 0, tv2 = 0;
+            if (col_idx < m && i + j + threadIdx.y < n) {
+                v = (float)mat[base_mat_idx + (i + j) * m];
+            }
+            tv2 = transposeReduceSum(v * v);
+            if (threadIdx.y * WARP_SZ == j) {
+                inner_v2 = tv2;
+            }
         }
-        local_total_v2 += v * v;
+
+        // outter loop reduce, reduce per 32 blocks
+        local_total_v2 += transposeReduceSum(inner_v2);
     }
-    float local_var = rsqrtf(transposeReduceSum(local_total_v2) / (float)n + eps);
+
+    float local_var = rsqrtf(local_total_v2 / (float)n + eps);
 
     if (threadIdx.y == 0 && col_idx < m) out_var[blockIdx.x * m + col_idx] = __float2half(local_var);
 
     for (int i = 0; i < n; i += blockDim.y) {
         if (col_idx < m && i + threadIdx.y < n) {
-            out[base_mat_idx + i * m] = __float2half((float)__ldg(mat + base_mat_idx + i * m) * local_var);
+            out[base_mat_idx + i * m] = __float2half((float)mat[base_mat_idx + i * m] * local_var);
         }
     }
 }
@@ -141,17 +197,34 @@ CPM_KERNEL_EXPORT void cu_layernorm_forward_mv(
 
     float local_total_v = 0.0;
     float local_total_v2 = 0.0;
-    for (int i = 0; i < n; i += WARP_SZ) {
-        float v = 0;
-        if (col_idx < m && i + threadIdx.y < n) {
-            v = (float)__ldg(mat + base_mat_idx + i * m);
+
+    // nested reduce loops to achieve higher precision
+    for (int i = 0; i < n; i += WARP_SZ * WARP_SZ) {
+        
+        // inner loop reduce
+        float inner_v = 0.0;
+        float inner_v2 = 0.0;
+        for (int j = 0; j < WARP_SZ * WARP_SZ && i + j < n; j += WARP_SZ) {
+            // reduce per block
+            float v = 0, tv = 0, tv2 = 0;
+            if (col_idx < m && i + j + threadIdx.y < n) {
+                v = (float)mat[base_mat_idx + (i + j) * m];
+            }
+            tv = transposeReduceSum(v);
+            tv2 = transposeReduceSum(v * v);
+            if (threadIdx.y * WARP_SZ == j) {
+                inner_v = tv;
+                inner_v2 = tv2;
+            }
         }
-        local_total_v += v;
-        local_total_v2 += v * v;
+
+        // outter loop reduce, reduce per 32 blocks
+        local_total_v += transposeReduceSum(inner_v);
+        local_total_v2 += transposeReduceSum(inner_v2);
     }
 
-    local_total_v = transposeReduceSum(local_total_v) / (float)n;
-    local_total_v2 = rsqrtf(transposeReduceSum(local_total_v2) / (float)n - local_total_v * local_total_v + eps);
+    local_total_v = local_total_v / (float)n;
+    local_total_v2 = rsqrtf(local_total_v2 / (float)n - local_total_v * local_total_v + eps);
 
     if (threadIdx.y == 0 && col_idx < m) {
         out_var[blockIdx.x * m + col_idx] = __float2half(local_total_v2);
@@ -183,19 +256,26 @@ CPM_KERNEL_EXPORT void cu_layernorm_backward_v(
     float local_var = col_idx < m ? (float)__ldg(var + blockIdx.x * m + col_idx) : 0.0;
     float n_half_rsqrt_v3 = -0.5 * local_var * local_var * local_var;
 
-    for (int i = 0; i < n; i += WARP_SZ) {
-        if (col_idx < m && i + threadIdx.y < n) {
-            local_grad_var += (float)__ldg(grad_in + base_mat_idx + i * m) * n_half_rsqrt_v3 * ((float)__ldg(mat + base_mat_idx + i * m));
+    for (int i = 0; i < n; i += WARP_SZ * WARP_SZ) {
+        float inner_v = 0;
+        for (int j = 0; j < WARP_SZ * WARP_SZ && i + j < n; j += WARP_SZ) {
+            float v = 0;
+            if (col_idx < m && i + j + threadIdx.y < n) {
+                v = (float)grad_in[base_mat_idx + (i + j) * m] * 
+                                    n_half_rsqrt_v3 * 
+                                    ((float)mat[base_mat_idx + (i + j) * m]);
+            }
+            v = transposeReduceSum(v);
+            if (threadIdx.y * WARP_SZ == j) inner_v = v;
         }
+        local_grad_var += transposeReduceSum(inner_v);
     }
-
-    local_grad_var = transposeReduceSum(local_grad_var);
 
     for (int i = 0; i < n; i += WARP_SZ) {
         if (col_idx < m && i + threadIdx.y < n) {
             grad_out[base_mat_idx + i * m] = __float2half(
-                (float)__ldg(grad_in + base_mat_idx + i * m) * local_var +
-                ((local_grad_var * (float)__ldg(mat + base_mat_idx + i * m) * 2) / (float)n)
+                (float)grad_in[base_mat_idx + i * m] * local_var +
+                ((local_grad_var * (float)mat[base_mat_idx + i * m] * 2) / (float)n)
             );
         }
     }
@@ -223,24 +303,36 @@ CPM_KERNEL_EXPORT void cu_layernorm_backward_mv(
     float n_half_rsqrt_v3 = -0.5 * local_var * local_var * local_var;
 
 
-    for (int i = 0; i < n; i += WARP_SZ) {
-        if (col_idx < m && i + threadIdx.y < n) {
-            float gi = (float)__ldg(grad_in + base_mat_idx + i * m);
-            local_grad_var += gi * n_half_rsqrt_v3 * ((float)__ldg(mat + base_mat_idx + i * m) - local_mean);
-            local_grad_mean += -gi * local_var;
-        }
-    }
+    for (int i = 0; i < n; i += WARP_SZ * WARP_SZ) {
+        float inner_m = 0;
+        float inner_v = 0;
 
-    local_grad_var = transposeReduceSum(local_grad_var);
-    local_grad_mean = transposeReduceSum(local_grad_mean);
+        for (int j = 0; j < WARP_SZ * WARP_SZ && i + j < n; j += WARP_SZ) {
+            float vv = 0, vm = 0;
+            if (col_idx < m && i + j + threadIdx.y < n) {
+                float gi = (float)grad_in[base_mat_idx + (i + j) * m];
+                vv = gi * n_half_rsqrt_v3 * ((float)mat[base_mat_idx + (i + j) * m] - local_mean);
+                vm = -gi * local_var;
+            }
+            vv = transposeReduceSum(vv);
+            vm = transposeReduceSum(vm);
+            if (threadIdx.y * WARP_SZ == j) {
+                inner_v = vv;
+                inner_m = vm;
+            }
+        }
+
+        local_grad_var += transposeReduceSum(inner_v);
+        local_grad_mean += transposeReduceSum(inner_m);
+    }
 
     local_grad_mean -= 2 * local_grad_var * local_mean;
 
     for (int i = 0; i < n; i += WARP_SZ) {
         if (col_idx < m && i + threadIdx.y < n) {
             grad_out[base_mat_idx + i * m] = __float2half(
-                (float)__ldg(grad_in + base_mat_idx + i * m) * local_var +
-                ((local_grad_mean + local_grad_var * (float)__ldg(mat + base_mat_idx + i * m) * 2) / (float)n)
+                (float)grad_in[base_mat_idx + i * m] * local_var +
+                ((local_grad_mean + local_grad_var * (float)mat[base_mat_idx + i * m] * 2) / (float)n)
             );
         }
     }
@@ -260,7 +352,7 @@ CPM_KERNEL_EXPORT void cu_layernorm_step(
     float local_total_v = 0;
     float local_total_v2 = 0;
     for (int i = threadIdx.x; i < n; i += blockDim.x) {
-        float v =  __ldg(mat + base_mat_idx + i);
+        float v =  mat[base_mat_idx + i];
         if (rd_mean) local_total_v += v;
         local_total_v2 += v * v;
     }
@@ -284,7 +376,7 @@ CPM_KERNEL_EXPORT void cu_layernorm_step(
     local_total_v = global_mean;
     
     for (int i = threadIdx.x; i < n; i += blockDim.x) {
-        out[base_mat_idx + i] = __float2half((__half2float(__ldg(mat + base_mat_idx + i)) - local_total_v) * local_total_v2);
+        out[base_mat_idx + i] = __float2half((__half2float(mat[base_mat_idx + i]) - local_total_v) * local_total_v2);
     }
 }
 

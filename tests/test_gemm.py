@@ -89,18 +89,13 @@ class TestGEMM(unittest.TestCase):
         with torch.cuda.device(0):
             for args in TEST_CASES:
                 batch, m, k, n, dtype = args
-                if dtype == torch.float16:
-                    threshold = 0.5
-                else:
-                    raise RuntimeError("Unknown dtype %s" % dtype)
 
                 for _ in range(10):
                     a, aT, b, bT = generate_matrix(batch, m, k, n, dtype)
                     int8 = random.randint(0, 1) == 1
                     out = ct.bmm(a, aT, b, bT, int8)
                     ans = real_bmm(a, aT, b, bT, int8)
-                    diff = (out - ans).abs().max()
-                    self.assertLess(diff, threshold, "diff is too big : %lf" % diff)
+                    self.assertTrue(torch.isclose(out, ans, 5e-1, 5e-1).all())
 
     def test_gemm_backward(self):
         with torch.cuda.device(1):
@@ -131,7 +126,5 @@ class TestGEMM(unittest.TestCase):
                     out.backward(gradient=gradient_start)
                     ans.backward(gradient=gradient_start)
 
-                    diff1 = (a1.grad - a2.grad).abs().max()
-                    diff2 = (b1.grad - b2.grad).abs().max()
-                    diff = torch.max(diff1, diff2)
-                    self.assertLess(diff, threshold, "diff is too big : %lf" % diff)
+                    self.assertTrue(torch.isclose(a1.grad, a2.grad, 5e-1, 5e-1).all())
+                    self.assertTrue(torch.isclose(b1.grad, b2.grad, 5e-1, 5e-1).all())

@@ -1,4 +1,3 @@
-from torch._C import dtype
 import cpm_kernels.torch as ct
 import cpm_kernels.kernels as ck
 import torch
@@ -43,8 +42,7 @@ class TestGemv(unittest.TestCase):
 
                 ans = ct.bmm( vec.unsqueeze(0), False, mat.unsqueeze(0), True , int8=True)
 
-                diff = torch.abs(ans - out).max()
-                self.assertLess(diff, 5e-3)
+                self.assertTrue(torch.isclose(out, ans, 5e-2, 5e-2).all())
 
     def test_gemv_fp16(self):
         with torch.cuda.device(2):
@@ -68,8 +66,7 @@ class TestGemv(unittest.TestCase):
 
                 ans = ct.bmm( mat, False, vec, False , int8=False)[:, :, 0]
 
-                diff = torch.abs(ans - out).max()
-                self.assertLess(diff, 0.1)
+                self.assertTrue(torch.isclose(out, ans, 5e-2, 5e-2).all())
 
     def test_gemv_fp16_transpose(self):
         with torch.cuda.device(2):
@@ -92,9 +89,7 @@ class TestGemv(unittest.TestCase):
                 )
 
                 ans = ct.bmm( mat, True, vec, False , int8=False)[:, :, 0]
-
-                diff = torch.abs(ans - out).max()
-                self.assertLess(diff, 0.1)
+                self.assertTrue(torch.isclose(out, ans, 5e-2, 5e-2).all())
 
     def test_gemv_logits(self):
         with torch.cuda.device(2):
@@ -119,4 +114,4 @@ class TestGemv(unittest.TestCase):
                 ans = ct.bmm( vec.unsqueeze(0), False, mat.unsqueeze(0), True , int8=False)
 
                 diff = torch.abs(ans - out).max()
-                self.assertLess(diff, 5e-2)
+                self.assertTrue(torch.isclose(out, ans, 5e-2, 5e-2).all())

@@ -42,18 +42,14 @@ class TestLayerNorm(unittest.TestCase):
                     y1 = l1(x1)
                     y2 = l2(x2)
 
-                    diff = (y1 - y2).abs().max()
-                    self.assertLess(diff, 1e-2)
+                    self.assertTrue(torch.isclose(y1, y2, 1e-2, 1e-2).all())
 
                     rd = torch.randn( x_raw.size(), device="cuda").half()
                     y1.backward(gradient=rd)
                     y2.backward(gradient=rd)
                     
-                    diff_1 = (x1.grad - x2.grad).abs().max()
-                    diff_2 = (l1.weight.grad - l2.weight.grad).abs().max() / 128
-
-                    self.assertLess(diff_1, 1e-2)
-                    self.assertLess(diff_2, 1e-2)
+                    self.assertTrue(torch.isclose(x1.grad, x2.grad, 1e-2, 1e-2).all())
+                    self.assertTrue(torch.isclose(l1.weight.grad, l2.weight.grad, 1e-1, 5e-1).all())
                     
                     l1.weight.grad.zero_()
                     l2.weight.grad.zero_()
@@ -85,20 +81,16 @@ class TestLayerNorm(unittest.TestCase):
                     y1 = l1(x1)
                     y2 = l2(x2)
 
-                    diff = (y1 - y2).abs().max()
-                    self.assertLess(diff, 1e-2)
+                    self.assertTrue(torch.isclose(y1, y2, 1e-2, 1e-2).all())
 
                     rd = torch.randn( x_raw.size(), device="cuda").half()
                     y1.backward(gradient=rd)
                     y2.backward(gradient=rd)
                     
-                    diff_1 = (x1.grad - x2.grad).abs().max()
-                    diff_2 = (l1.weight.grad - l2.weight.grad).abs().max() / 128
-                    diff_3 = (l1.bias.grad - l2.bias.grad).abs().max() / 128
+                    self.assertTrue(torch.isclose(x1.grad, x2.grad, 1e-2, 1e-2).all())
 
-                    self.assertLess(diff_1, 1e-2)
-                    self.assertLess(diff_2, 1e-2)
-                    self.assertLess(diff_3, 1e-2)
+                    self.assertTrue(torch.isclose(l1.weight.grad, l2.weight.grad, 1e-1, 5e-1).all())
+                    self.assertTrue(torch.isclose(l1.bias.grad, l2.bias.grad, 1e-2, 1e-2).all())
                     
                     l1.weight.grad.zero_()
                     l2.weight.grad.zero_()
@@ -118,8 +110,7 @@ class TestLayerNorm(unittest.TestCase):
                     ans = ct.normalizeTH(x, eps, i < 8)
                     ct.normalize_inplace(x, eps, i < 8)
 
-                    diff = (ans - x).abs().max()
-                    self.assertLess(diff, 5e-3)
+                    self.assertTrue(torch.isclose(ans, x, 5e-3, 5e-3).all())
     
     def test_normalize_step(self):
         with torch.cuda.device(4):
@@ -142,8 +133,7 @@ class TestLayerNorm(unittest.TestCase):
                         torch.cuda.current_stream().cuda_stream
                     )
 
-                    diff = (ans - out).abs().max()
-                    self.assertLess(diff, 5e-3)
+                    self.assertTrue(torch.isclose(ans, out, 5e-3, 5e-3).all())
 
                     ck.layernorm_step_inplace(
                         128, shape,
@@ -152,5 +142,4 @@ class TestLayerNorm(unittest.TestCase):
                         i < 8,
                         torch.cuda.current_stream().cuda_stream
                     )
-                    diff = (ans - x).abs().max()
-                    self.assertLess(diff, 5e-3)
+                    self.assertTrue(torch.isclose(ans, x, 5e-3, 5e-3).all())

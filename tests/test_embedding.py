@@ -33,16 +33,14 @@ class TestEmbedding(unittest.TestCase):
                 out = cpm_emb(ipt.to(torch.int32))
                 ans = pth_emb(ipt)
 
-                diff = torch.abs(out - ans).max()
-                self.assertLess(diff, 1e-5)
+                self.assertTrue(torch.isclose(out, ans, 1e-3, 1e-3).all())
 
                 graident_start = torch.randn(batch, hidden_size, seq_len, dtype=torch.half).to("cuda") / batch
 
                 out.backward(gradient=graident_start)
                 ans.backward(gradient=graident_start)
 
-                diff = torch.abs(cpm_emb.weight.grad - pth_emb.weight.grad).max()
-                self.assertLess(diff, 1e-3)
+                self.assertTrue(torch.isclose(cpm_emb.weight.grad, pth_emb.weight.grad, 1e-3, 1e-3).all())
                 
     def test_embedding_step(self):
         with torch.cuda.device(0):
@@ -63,6 +61,5 @@ class TestEmbedding(unittest.TestCase):
                     out.data_ptr(),
                     torch.cuda.current_stream().cuda_stream
                 )
-                diff = torch.abs(out - ans).max()
-                self.assertLess(diff, 1e-5)
+                self.assertTrue(torch.isclose(out, ans, 1e-3, 1e-3).all())
                 

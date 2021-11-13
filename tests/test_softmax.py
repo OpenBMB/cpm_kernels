@@ -22,15 +22,13 @@ class TestSoftmax(unittest.TestCase):
                 x2 = x.requires_grad_()
                 y1 = ct.softmaxTH(x1)
                 y2 = ct.softmax(x2)
-                diff = (y1 - y2).abs().max()
-                self.assertLess(diff, 5e-3)
+                self.assertTrue(torch.isclose(y1, y2, 1e-3, 1e-3).all())
 
                 rd = torch.randn( *shape, device="cuda").half()
                 y1.backward(gradient=rd)
                 y2.backward(gradient=rd)
                 
-                diff_grad = (x1.grad - x2.grad).abs().max()
-                self.assertLess(diff_grad, 5e-3)
+                self.assertTrue(torch.isclose(x1.grad, x2.grad, 1e-3, 1e-3).all())
     
     def test_softmax_inplace(self):
         with torch.cuda.device(6):
@@ -48,8 +46,7 @@ class TestSoftmax(unittest.TestCase):
                 x = torch.randn(*shape, device="cuda").half()
                 ans = ct.softmaxTH(x)
                 ct.softmax_inplace(x)
-                diff = (x - ans).abs().max()
-                self.assertLess(diff, 5e-3)
+                self.assertTrue(torch.isclose(x, ans, 1e-3, 1e-3).all())
 
     def test_softmax_step(self):
         with torch.cuda.device(6):
@@ -69,5 +66,4 @@ class TestSoftmax(unittest.TestCase):
                     torch.cuda.current_stream().cuda_stream
                 )
 
-                diff = (x - ans).abs().max()
-                self.assertLess(diff, 5e-3)
+                self.assertTrue(torch.isclose(x, ans, 1e-3, 1e-3).all())

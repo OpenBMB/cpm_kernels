@@ -2,48 +2,45 @@
 #include "common.h"
 #include <cuda_fp16.h>
 
-// block <batch_size>,  thread<min(n, 1024)>,  half n
+// block <batch_size，n // 1024>,  thread<min(n, 1024)>,  half n
 CPM_KERNEL_EXPORT void cu_arith_element_add (
     int32_t batch, int32_t n,
     const half2 *x,         // (batch, n)
     const half2 *y,         // (batch, n)
     half2 *out
 ) {
-    int32_t base_idx = blockIdx.x * n + threadIdx.x;
-    for (int i = 0; i < n; i += blockDim.x) {
-        if (i + threadIdx.x < n) {
-            out[base_idx + i] = __hadd2(x[base_idx + i], y[base_idx + i]);;
-        }
+    int32_t col = threadIdx.x + blockIdx.y * blockDim.x;
+    int32_t pos = blockIdx.x * n + col;
+    if (col < n) {
+        out[pos] = __hadd2(x[pos], y[pos]);
     }
 }
 
-// block <batch_size>,  thread<min(n, 1024)>,  half n
+// block <batch_size, n // 1024>,  thread<min(n, 1024)>,  half n
 CPM_KERNEL_EXPORT void cu_arith_element_mul (
     int32_t batch, int32_t n,
     const half2 *x,         // (batch, n)
     const half2 *y,         // (batch, n)
     half2 *out
 ) {
-    int32_t base_idx = blockIdx.x * n + threadIdx.x;
-    for (int i = 0; i < n; i += blockDim.x) {
-        if (i + threadIdx.x < n) {
-            out[base_idx + i] = __hmul2(x[base_idx + i], y[base_idx + i]);;
-        }
+    int32_t col = threadIdx.x + blockIdx.y * blockDim.x;
+    int32_t pos = blockIdx.x * n + col;
+    if (col < n) {
+        out[pos] = __hmul2(x[pos], y[pos]);
     }
 }
 
-// block <batch_size>,  thread<min(n, 1024)>,   half n
+// block <batch_size, n // 1024>,  thread<min(n, 1024)>,   half n
 CPM_KERNEL_EXPORT void cu_arith_batch_add_forward(
     int32_t batch, int32_t n,
     const half2 *x,         // (batch, n)
     const half2 *y,         // (n)
     half2 *out              // (batch, n)
 ) {
-    int32_t base_idx = blockIdx.x * n + threadIdx.x;
-    for (int i = 0; i < n; i += blockDim.x) {
-        if (i + threadIdx.x < n) {
-            out[base_idx + i] = __hadd2(x[base_idx + i], __ldg(y + i + threadIdx.x));
-        }
+    int32_t col = threadIdx.x + blockIdx.y * blockDim.x;
+    int32_t pos = blockIdx.x * n + col;
+    if (col < n) {
+        out[pos] = __hadd2(x[pos], __ldg(y + col));
     }
 }
 
@@ -66,24 +63,24 @@ CPM_KERNEL_EXPORT void cu_arith_batch_add_backward(
     }
 }
 
-// block <batch, n>    thread<min(m, 1024)>,  half m
+// block <batch, n, m // 1024>    thread<min(m, 1024)>,  half m
 CPM_KERNEL_EXPORT void cu_arith_ln_add(
     int32_t batch, int32_t n, int32_t m,
     const half2 *x,         // (batch, n, m)
     const half *beta,      // (n)
     half2 *out              // (batch, n, m)
 ) {
-    int32_t base_x_idx = (blockIdx.x * n + blockIdx.y) * m + threadIdx.x;
+    int32_t col = threadIdx.x + blockIdx.z * blockDim.x;
+    int32_t base_x_idx = (blockIdx.x * n + blockIdx.y) * m + col;
     half2 beta_v = __half2half2(__ldg(beta + blockIdx.y));
-    for (int i = 0; i < m; i += blockDim.x) {
-        if (i + threadIdx.x < m) {
-            out[base_x_idx + i] = __hadd2(x[base_x_idx + i], beta_v);
-        }
+
+    if (col < m) {
+        out[base_x_idx] = __hadd2(x[base_x_idx], beta_v);
     }
 }
 
 
-// block <batch, n>    thread<min(m, 1024)>,  half m
+// block <batch, n, m // 1024>    thread<min(m, 1024)>,  half m
 CPM_KERNEL_EXPORT void cu_arith_ln_mul_add(
     int32_t batch, int32_t n, int32_t m,
     const half2 *x,         // (batch, n, m)
@@ -91,50 +88,48 @@ CPM_KERNEL_EXPORT void cu_arith_ln_mul_add(
     const half *beta,      // (n)
     half2 *out              // (batch, n, m)
 ) {
-    int32_t base_x_idx = (blockIdx.x * n + blockIdx.y) * m + threadIdx.x;
+    int32_t col = threadIdx.x + blockIdx.z * blockDim.x;
+    int32_t base_x_idx = (blockIdx.x * n + blockIdx.y) * m + col;
     half2 alpha_v = __half2half2(__ldg(alpha + blockIdx.y));
     half2 beta_v = __half2half2(__ldg(beta + blockIdx.y));
-    for (int i = 0; i < m; i += blockDim.x) {
-        if (i + threadIdx.x < m) {
-            out[base_x_idx + i] = __hfma2(x[base_x_idx + i], alpha_v, beta_v);
-        }
+
+    if (col < m) {
+        out[base_x_idx] = __hfma2(x[base_x_idx], alpha_v, beta_v);
     }
 }
 
-// block <batch, n>    thread<min(m, 1024)>,    half m
+// block <batch, n, m // 1024>    thread<min(m, 1024)>,    half m
 CPM_KERNEL_EXPORT void cu_arith_ln_mul(
     int32_t batch, int32_t n, int32_t m,
     const half2 *x,         // (batch, n, m)
     const half *alpha,      // (n)
     half2 *out
 ) {
-    int32_t base_x_idx = (blockIdx.x * n + blockIdx.y) * m + threadIdx.x;
+    int32_t col = threadIdx.x + blockIdx.z * blockDim.x;
+    int32_t base_x_idx = (blockIdx.x * n + blockIdx.y) * m + col;
     half2 alpha_v = __half2half2(__ldg(alpha + blockIdx.y));
-    for (int i = 0; i < m; i += blockDim.x) {
-        if (i + threadIdx.x < m) {
-            out[base_x_idx + i] =  __hmul2(x[base_x_idx + i], alpha_v);
-        }
+    if (col < m) {
+        out[base_x_idx] =  __hmul2(x[base_x_idx], alpha_v);
     }
 }
 
 
-// block <batch, n>    thread<min(m, 1024)>,   half m
+// block <batch, n, m // 1024>    thread<min(m, 1024)>,   half m
 CPM_KERNEL_EXPORT void cu_arith_ln_div(
     int32_t batch, int32_t n, int32_t m,
     const half2 *x,         // (batch, n, m)
     const half *alpha,      // (n)
     half2 *out
 ) {
-    int32_t base_x_idx = (blockIdx.x * n + blockIdx.y) * m + threadIdx.x;
+    int32_t col = threadIdx.x + blockIdx.z * blockDim.x;
+    int32_t base_x_idx = (blockIdx.x * n + blockIdx.y) * m + col;
     half2 alpha_v = __half2half2(__hdiv(__float2half(1.0), __ldg(alpha + blockIdx.y)));
-    for (int i = 0; i < m; i += blockDim.x) {
-        if (i + threadIdx.x < m) {
-            out[base_x_idx + i] = __hmul2(x[base_x_idx + i], alpha_v);
-        }
+    if (col < m) {
+        out[base_x_idx] = __hmul2(x[base_x_idx], alpha_v);
     }
 }
 
-// block <batch, n>    thread<min(m, 1024)>,    half m
+// block <batch, n, m // 1024>    thread<min(m, 1024)>,    half m
 CPM_KERNEL_EXPORT void cu_arith_ln_sub_div(
     int32_t batch, int32_t n, int32_t m,
     const half2 *x,         // (batch, n, m)
@@ -142,16 +137,15 @@ CPM_KERNEL_EXPORT void cu_arith_ln_sub_div(
     const half *beta,       // (n)
     half2* out
 ) {
-    int32_t base_x_idx = (blockIdx.x * n + blockIdx.y) * m + threadIdx.x;
+    int32_t col = threadIdx.x + blockIdx.z * blockDim.x;
+    int32_t base_x_idx = (blockIdx.x * n + blockIdx.y) * m + col;
     float rev_alpha = 1.0 / (float)(__ldg(alpha + blockIdx.y));
     float neg_beta = - (float)(__ldg(beta + blockIdx.y)) * rev_alpha;
     
     half2 alpha_v = __float2half2_rn(rev_alpha);   // 1 / alpha
     half2 beta_v = __float2half2_rn(neg_beta);   // - beta / alpha
-    for (int i = 0; i < m; i += blockDim.x) {
-        if (i + threadIdx.x < m) {
-            out[base_x_idx + i] = __hfma2(x[base_x_idx + i], alpha_v, beta_v);
-        }
+    if (col < m) {
+        out[base_x_idx] = __hfma2(x[base_x_idx], alpha_v, beta_v);
     }
 }
 
@@ -167,25 +161,41 @@ CPM_KERNEL_EXPORT void cu_arith_ln_mul_backward(
     /*
     reduce_sum(x * grad_out)
     */
-    float sum = 0;
-    for (int b = 0; b < batch; b += blockDim.x) {
-        int batch_idx = b + threadIdx.y;
-        int base_idx = batch_idx * n * m + blockIdx.x * m + threadIdx.x;
-        for (int i = 0; i < m; i += blockDim.y) {
-            if (batch_idx < batch && i + threadIdx.x < m) {
-                sum += (float)__ldg(grad_out + base_idx + i) * (float)__ldg(x + base_idx + i);
+    float local_sum = 0;
+    for (int b = 0; b < batch; b += WARP_SZ * WARP_SZ) {
+        float inner_sum = 0;
+        for (int inner_b = 0; inner_b < WARP_SZ * WARP_SZ && inner_b + b < batch; inner_b += WARP_SZ) {
+            int batch_idx = b + inner_b + threadIdx.y;
+            int base_idx = batch_idx * n * m + blockIdx.x * m + threadIdx.x;
+
+            float batch_sum = 0;
+            for (int i = 0; i < m; i += WARP_SZ * WARP_SZ) {
+                float inner_v = 0;
+                for (int j = 0; j < WARP_SZ * WARP_SZ && i + j < m; j += WARP_SZ) {
+                    float v = 0;
+                    if (batch_idx < batch && i + j + threadIdx.x < m) {
+                        v = (float)grad_out[base_idx + i + j] * (float)x[base_idx + i + j];
+                    }
+                    v = warpReduceSum(v);           // sum of 32 elements
+                    v = __shfl_sync(0xFFFFFFFF, v, 0); // broadcast to all threads in warp
+                    if (threadIdx.x * WARP_SZ == j) inner_v = v;
+                }
+                inner_v = warpReduceSum(inner_v);   // sum of 1024 elements
+
+                // stores the sum of batch (b + inner_b + threadIdx.y) in (0, threadIdx.y)
+                batch_sum += inner_v;   // sum of all elements in batch
             }
+            
+            batch_sum = transposeReduceSum(batch_sum);  // sum of 32 batches
+            if (threadIdx.y * WARP_SZ == inner_b) inner_sum = batch_sum;
         }
+        inner_sum = transposeReduceSum(inner_sum);  // sum of 1024 batches    
+        local_sum += inner_sum; // sum of all batches
     }
-    sum = warpReduceSum(sum);
-    __shared__ float shared[32];
-    if (threadIdx.x == 0) {
-        shared[threadIdx.y] = sum;
-    }
-    __syncthreads();
-    sum = warpReduceSum(shared[threadIdx.x]);
+
+
     if (threadIdx.x == 0 && threadIdx.y == 0) {
-        grad[blockIdx.x] = __float2half(sum);
+        grad[blockIdx.x] = __float2half(local_sum);
     }
 }
 
@@ -196,31 +206,48 @@ CPM_KERNEL_EXPORT void cu_arith_ln_add_backward(
     const half *grad_out,       // (batch, n, m)
     half *grad                  // (n)
 ) {
-    float sum = 0;
-    for (int b = 0; b < batch; b += blockDim.x) {
-        int batch_idx = b + threadIdx.y;
-        int base_idx = batch_idx * n * m + blockIdx.x * m + threadIdx.x;
-        for (int i = 0; i < m; i += blockDim.y) {
-            if (batch_idx < batch && i + threadIdx.x < m) {
-                sum += (float)__ldg(grad_out + base_idx + i);
+
+    float local_sum = 0;
+    for (int b = 0; b < batch; b += WARP_SZ * WARP_SZ) {
+        float inner_sum = 0;
+        for (int inner_b = 0; inner_b < WARP_SZ * WARP_SZ && inner_b + b < batch; inner_b += WARP_SZ) {
+            int batch_idx = b + inner_b + threadIdx.y;
+            int base_idx = batch_idx * n * m + blockIdx.x * m + threadIdx.x;
+
+            float batch_sum = 0;
+            for (int i = 0; i < m; i += WARP_SZ * WARP_SZ) {
+                float inner_v = 0;
+                for (int j = 0; j < WARP_SZ * WARP_SZ && i + j < m; j += WARP_SZ) {
+                    float v = 0;
+                    if (batch_idx < batch && i + j + threadIdx.x < m) {
+                        v = (float)grad_out[base_idx + i + j];
+                    }
+                    v = warpReduceSum(v);           // sum of 32 elements
+                    v = __shfl_sync(0xFFFFFFFF, v, 0); // broadcast to all threads in warp
+                    if (threadIdx.x * WARP_SZ == j) inner_v = v;
+                }
+                inner_v = warpReduceSum(inner_v);   // sum of 1024 elements
+
+                // stores the sum of batch (b + inner_b + threadIdx.y) in (0, threadIdx.y)
+                batch_sum += inner_v;   // sum of all elements in batch
             }
+            
+            batch_sum = transposeReduceSum(batch_sum);  // sum of 32 batches
+            if (threadIdx.y * WARP_SZ == inner_b) inner_sum = batch_sum;
         }
+        inner_sum = transposeReduceSum(inner_sum);  // sum of 1024 batches    
+        local_sum += inner_sum; // sum of all batches
     }
-    sum = warpReduceSum(sum);
-    __shared__ float shared[32];
-    if (threadIdx.x == 0) {
-        shared[threadIdx.y] = sum;
-    }
-    __syncthreads();
-    sum = warpReduceSum(shared[threadIdx.x]);
+
+
     if (threadIdx.x == 0 && threadIdx.y == 0) {
-        grad[blockIdx.x] = __float2half(sum);
+        grad[blockIdx.x] = __float2half(local_sum);
     }
 }
 
 
 
-// block <batch>    thread<min(n, 1024)>,  half n
+// block <batch, n // 1024>    thread<min(n, 1024)>,  half n
 CPM_KERNEL_EXPORT void cu_arith_batch_mul_add(
     int32_t batch, int32_t n,
     const half2 *x,         // (batch, n)
@@ -228,11 +255,9 @@ CPM_KERNEL_EXPORT void cu_arith_batch_mul_add(
     const half2 *beta,      // (n)
     half2 *out              // (batch, n)
 ) {
-    const half2 *base_x = x + blockIdx.x * n;
-    half2 *base_out = out + blockIdx.x * n;
-
-    for (int i = threadIdx.x; i < n; i += blockDim.x) {
-        base_out[i] = __hfma2(base_x[i], __ldg(alpha + i), __ldg(beta + i));
+    int32_t col = threadIdx.x + blockIdx.y * blockDim.x;
+    if (col < n) {
+        out[blockIdx.x * n + col] = __hfma2(x[blockIdx.x * n + col], __ldg(alpha + col), __ldg(beta + col));
     }
 }
 
@@ -243,10 +268,8 @@ CPM_KERNEL_EXPORT void cu_arith_batch_mul(
     const half2 *alpha,     // (n) 
     half2 *out              // (batch, n)
 ) {
-    const half2 *base_x = x + blockIdx.x * n;
-    half2 *base_out = out + blockIdx.x * n;
-
-    for (int i = threadIdx.x; i < n; i += blockDim.x) {
-        base_out[i] = __hmul2(base_x[i], __ldg(alpha + i));
+    int32_t col = threadIdx.x + blockIdx.y * blockDim.x;
+    if (col < n) {
+        out[blockIdx.x * n + col] = __hmul2(x[blockIdx.x * n + col], __ldg(alpha + col));
     }
 }

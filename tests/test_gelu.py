@@ -12,15 +12,13 @@ class TestGeLU(unittest.TestCase):
             del x
             out = ct.gelu(x1)
             ans = ct.geluTH(x2)
-            diff = torch.abs(out - ans).max()
-            self.assertLess(diff, 1e-2)
+            self.assertTrue(torch.isclose(out, ans, 1e-2, 1e-2).all())
 
             gradient_start = torch.randn(4, 16, 512, 1024, device="cuda").half()
             out.backward(gradient=gradient_start)
             ans.backward(gradient=gradient_start)
 
-            diff = torch.abs(x1.grad - x2.grad).max()
-            self.assertLess(diff, 1e-2)
+            self.assertTrue(torch.isclose(x1.grad, x2.grad, 1e-2, 1e-2).all())
 
     def test_gelu_inplace(self):
         with torch.cuda.device(0):
@@ -29,4 +27,4 @@ class TestGeLU(unittest.TestCase):
             ct.gelu_inplace(x)
 
             diff = torch.abs(x - ans).max()
-            self.assertLess(diff, 1e-2)
+            self.assertTrue(torch.isclose(x, ans, 1e-2, 1e-2).all())

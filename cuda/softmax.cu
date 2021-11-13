@@ -14,24 +14,30 @@ CPM_KERNEL_EXPORT  void cu_softmax_forward(
     int32_t col_idx = blockIdx.y * WARP_SZ + threadIdx.x;
     for (int i = 0; i < n; i += WARP_SZ) {
         if (col_idx < m && i + threadIdx.y < n) {
-            local_max = fmaxf((float)__ldg(in + base_mat_idx + i * m), local_max);
+            local_max = fmaxf((float)in[base_mat_idx + i * m], local_max);
         }
     }
 
     local_max = fmaxf(transposeReduceMax(local_max), -1e6);
     
     float local_sum = 0;
-    for (int i = 0; i < n; i += WARP_SZ) {
-        if (col_idx < m && i + threadIdx.y < n) {
-            local_sum += expf((float)__ldg(in + base_mat_idx + i * m) - local_max);
+    for (int i = 0; i < n; i += WARP_SZ * WARP_SZ) {
+        float inner_sum = 0;
+        for (int j = 0; j < WARP_SZ * WARP_SZ && i + j < n; j += WARP_SZ) {
+            float v = 0;
+            if (col_idx < m && i + j + threadIdx.y < n) {
+                v = expf((float)in[base_mat_idx + (i + j) * m] - local_max);
+            }
+            v = transposeReduceSum(v);
+            if (threadIdx.y * WARP_SZ == j) inner_sum = v;
         }
+        local_sum += transposeReduceSum(inner_sum);
     }
-
-    local_sum = transposeReduceSum(local_sum) + 1e-10;      // avoid nan
+    local_sum += 1e-10; // avoid nan
     
     for (int i = 0; i < n; i += WARP_SZ) {
         if (col_idx < m && i + threadIdx.y < n) {
-            out[base_mat_idx + i * m] = __float2half( expf((float)__ldg(in + base_mat_idx + i * m) - local_max) / local_sum );
+            out[base_mat_idx + i * m] = __float2half( expf((float)in[base_mat_idx + i * m] - local_max) / local_sum );
         }
     }
 }
@@ -54,13 +60,19 @@ CPM_KERNEL_EXPORT  void cu_softmax_inplace_forward(
     local_max = fmaxf(transposeReduceMax(local_max), -1e6);
     
     float local_sum = 0;
-    for (int i = 0; i < n; i += WARP_SZ) {
-        if (col_idx < m && i + threadIdx.y < n) {
-            local_sum += expf((float)x[base_mat_idx + i * m] - local_max);
+    for (int i = 0; i < n; i += WARP_SZ * WARP_SZ) {
+        float inner_sum = 0;
+        for (int j = 0; j < WARP_SZ * WARP_SZ && i + j < n; j += WARP_SZ) {
+            float v = 0;
+            if (col_idx < m && i + j + threadIdx.y < n) {
+                v = expf((float)x[base_mat_idx + (i + j) * m] - local_max);
+            }
+            v = transposeReduceSum(v);
+            if (threadIdx.y * WARP_SZ == j) inner_sum = v;
         }
+        local_sum += transposeReduceSum(inner_sum);
     }
-
-    local_sum = transposeReduceSum(local_sum) + 1e-10;      // avoid nan
+    local_sum += 1e-10; // avoid nan
     
     for (int i = 0; i < n; i += WARP_SZ) {
         if (col_idx < m && i + threadIdx.y < n) {
@@ -81,12 +93,18 @@ CPM_KERNEL_EXPORT  void cu_softmax_backward(
     int32_t col_idx = blockIdx.y * WARP_SZ + threadIdx.x;
 
     float local_sum = 0;
-    for (int i = 0; i < n; i += WARP_SZ) {
-        if (col_idx < m && i + threadIdx.y < n) {
-            local_sum += (float)__ldg(out + base_mat_idx + i * m) * (float)__ldg(grad_in + base_mat_idx + i * m);
+    for (int i = 0; i < n; i += WARP_SZ * WARP_SZ) {
+        float inner_sum = 0;
+        for (int j = 0; j < WARP_SZ * WARP_SZ && i + j < n; j += WARP_SZ) {
+            float v = 0;
+            if (col_idx < m && i + j + threadIdx.y < n) {
+                v = (float)out[base_mat_idx + (i + j) * m] * (float)grad_in[base_mat_idx + (i + j) * m];
+            }
+            v = transposeReduceSum(v);
+            if (threadIdx.y * WARP_SZ == j) inner_sum = v;
         }
+        local_sum += transposeReduceSum(inner_sum);
     }
-    local_sum = transposeReduceSum(local_sum);
     
     for (int i = 0; i < n; i += WARP_SZ) {
         if (col_idx < m && i + threadIdx.y < n) {
