@@ -12,8 +12,8 @@ class TestGemv(unittest.TestCase):
                 N = 4444
                 M = 8888
                 ssk = math.sqrt(math.sqrt(M))
-                mat = torch.randn(N, M, dtype=torch.half, device="cuda") / ssk
-                vec = torch.randn(BATCH, M, dtype=torch.half, device="cuda") / ssk
+                mat = torch.randn(N, M, dtype=torch.half, device="cuda")
+                vec = torch.randn(BATCH, M, dtype=torch.half, device="cuda")
 
                 mat_scale = torch.empty(N, dtype=torch.half, device="cuda")
                 mat_quant = torch.empty(N, M, dtype=torch.int8, device="cuda")
@@ -30,19 +30,33 @@ class TestGemv(unittest.TestCase):
                     mat_quant.data_ptr(),
                     torch.cuda.current_stream().cuda_stream
                 )
+                vec_scale = torch.empty(BATCH, dtype=torch.half, device="cuda")
+                ck.gemv_calc_scale(
+                    BATCH, M,
+                    vec.data_ptr(),
+                    vec_scale.data_ptr(),
+                    torch.cuda.current_stream().cuda_stream
+                )
+                vec_quant = torch.empty(BATCH, M, dtype=torch.int8, device="cuda")
+                ck.gemv_round(
+                    BATCH, M,
+                    vec.data_ptr(),
+                    vec_scale.data_ptr(),
+                    vec_quant.data_ptr(),
+                    torch.cuda.current_stream().cuda_stream
+                )
                 out = torch.empty(BATCH, N, dtype=torch.half, device="cuda")
                 ck.gemv_broadcast_mat_int8(
                     BATCH, N, M,
                     mat_scale.data_ptr(),
                     mat_quant.data_ptr(),
-                    vec.data_ptr(),
+                    vec_scale.data_ptr(),
+                    vec_quant.data_ptr(),
                     out.data_ptr(),
                     torch.cuda.current_stream().cuda_stream
                 )
-
                 ans = ct.bmm( vec.unsqueeze(0), False, mat.unsqueeze(0), True , int8=True)
-
-                self.assertTrue(torch.isclose(out, ans, 5e-2, 5e-2).all())
+                self.assertTrue(torch.isclose(out, ans, 1e-3, 1e-3).all())
 
     def test_gemv_fp16(self):
         with torch.cuda.device(2):
@@ -63,9 +77,7 @@ class TestGemv(unittest.TestCase):
                     out.data_ptr(),
                     torch.cuda.current_stream().cuda_stream
                 )
-
                 ans = ct.bmm( mat, False, vec, False , int8=False)[:, :, 0]
-
                 self.assertTrue(torch.isclose(out, ans, 5e-2, 5e-2).all())
 
     def test_gemv_fp16_transpose(self):
@@ -112,6 +124,4 @@ class TestGemv(unittest.TestCase):
                 )
 
                 ans = ct.bmm( vec.unsqueeze(0), False, mat.unsqueeze(0), True , int8=False)
-
-                diff = torch.abs(ans - out).max()
                 self.assertTrue(torch.isclose(out, ans, 5e-2, 5e-2).all())

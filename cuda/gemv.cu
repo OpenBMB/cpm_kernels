@@ -22,82 +22,79 @@ __inline__ __device__ int32_t blockReduceSumInt32(int32_t x) {
     return x;
 }
 
-// block <batch>,   thread <min(1024, round_up(dim_in // 4, 32))>
-CPM_KERNEL_EXPORT void cu_gemv_broadcast_mat_int8(
-    int32_t batch, int32_t dim_out, int32_t dim_in,
-    const half *scale_mat,              //  <dim_out>
-    const char4 *mat,                   //  <dim_out, dim_in>
-    const half2 *vec,                   //  <batch, dim_in>
-    half *out                           //  <batch, dim_out>
+// block <batch>,   thread <min(1024, round_up(n, 32))>
+CPM_KERNEL_EXPORT void cu_gemv_calc_scale(
+    int32_t batch, int32_t n,
+    const half *vec,                   // <batch, n>
+    half *out                           // <batch>
 ) {
-    int32_t base_v = blockIdx.x * (dim_in / 2) + threadIdx.x * 2;
-    
-    __shared__ float global_max;
+    int32_t base_vec = blockIdx.x * n;
     float local_max = 0;
-    
-    for (int i = 0; (i + threadIdx.x) * 4 < dim_in; i += blockDim.x) {
-        const half2 *ptr = vec + (base_v + i * 2);
-        half2 a = __habs2(__ldg(ptr));
-        half2 b = __habs2(__ldg(ptr + 1));
-        local_max = fmaxf(local_max, fmaxf(a.x, a.y));
-        local_max = fmaxf(local_max, fmaxf(b.x, b.y));
+    for (int i = threadIdx.x; i < n; i += blockDim.x) {
+        local_max = fmaxf( local_max, fabsf(vec[base_vec + i]) );
     }
     local_max = blockReduceMax(local_max);
     if (threadIdx.x == 0) {
-        global_max = local_max / 127.0;
-    }
-    __syncthreads();
-
-    local_max = global_max;
-
-    half2 scale_vec = __float2half2_rn(local_max);
-    for (int j = 0; j < dim_out; j ++) {
-        const char4 *base_mat = mat + j * (dim_in / 4)  + threadIdx.x;
-        int sum = 0;
-        for (int i = 0; (i + threadIdx.x) * 4 < dim_in; i += blockDim.x) {
-            const half2 *ptr = vec + (base_v + i * 2);
-            half2 a = __ldg(ptr);
-            half2 b = __ldg(ptr + 1);
-            
-            a = __h2div(a, scale_vec);
-            b = __h2div(b, scale_vec);
-
-            char4 vec_x;
-            vec_x.x = (int8_t)nearbyintf(a.x);
-            vec_x.y = (int8_t)nearbyintf(a.y);
-            vec_x.z = (int8_t)nearbyintf(b.x);
-            vec_x.w = (int8_t)nearbyintf(b.y);
-
-            sum = __dp4a(vec_x, __ldg(base_mat + i), sum);
-        }
-        sum = blockReduceSumInt32(sum);
-        if (threadIdx.x == 0) {
-             out[blockIdx.x * dim_out + j] = __float2half((float)sum * local_max * (float)__ldg(scale_mat + j));
-        }
+        out[blockIdx.x] = __float2half(local_max / 127.0);
     }
 }
 
-// block <batch>,   thread <min(1024, round_up(dim_in // 2, 32))>
+// block <batch, n // 1024>     thread <min(1024, n)>
+CPM_KERNEL_EXPORT void cu_gemv_round(
+    int32_t batch, int32_t n,
+    const half *vec,            // (batch, n)
+    const half* scale,          // (batch,)
+    int8_t* out                 // (batch, n)
+) {
+    int32_t col_idx = blockIdx.y * blockDim.x + threadIdx.x;
+    half v_scale = __ldg(scale + blockIdx.x);
+    if (col_idx < n) {
+        out[blockIdx.x * n + col_idx] = (int8_t) nearbyintf((float)vec[blockIdx.x * n + col_idx] / (float)v_scale);
+    }
+}
+
+// block <batch, dim_out>       thread <min(1024, dim_in // 4)>         dim_in % 4 == 0
+CPM_KERNEL_EXPORT void cu_gemv_broadcast_mat_int8(
+    int32_t batch, int32_t dim_out, int32_t dim_in,
+    const half *scale_mat,              // <dim_out>
+    const char4 *mat,                   // <dim_out, dim_in>
+    const half *scale_vec,              // <batch,>
+    const char4 *vec,                   // <batch, dim_in>
+    half *out                           // <batch, dim_out>
+) {
+    int32_t quarter_dim_in = dim_in >> 2;
+    const char4* base_mat = mat + blockIdx.y * quarter_dim_in;
+    const char4* base_vec = vec + blockIdx.x * quarter_dim_in;
+    int32_t local_sum = 0;
+    for (int32_t i = threadIdx.x; i < quarter_dim_in; i += blockDim.x) {
+        local_sum = __dp4a(base_mat[i], base_vec[i], local_sum);
+    }
+    local_sum = blockReduceSumInt32(local_sum);
+    if (threadIdx.x == 0) {
+        out[blockIdx.x * dim_out + blockIdx.y] = __float2half((float)local_sum * (float)__ldg(scale_vec + blockIdx.x) * (float)__ldg(scale_mat + blockIdx.y));
+    }
+}
+
+// block <batch, dim_out>,   thread <min(1024, round_up(dim_in // 2, 32))>
 CPM_KERNEL_EXPORT void cu_gemv_fp16(
     int32_t batch, int32_t dim_out, int32_t dim_in,
     const half2 *mat,                   //  <batch, dim_out, dim_in>
     const half2 *vec,                   //  <batch, dim_in>
     half *out                           //  <batch, dim_out>
 ) {
-    int32_t base_v = blockIdx.x * (dim_in / 2) + threadIdx.x;
+    int32_t half_dim_in = dim_in >> 1;
+    int32_t base_v = blockIdx.x * half_dim_in;
+    int32_t base_mat = (blockIdx.x * dim_out + blockIdx.y) * half_dim_in;
 
-    for (int j = 0; j < dim_out; j ++) {
-        int32_t base_mat = (blockIdx.x * dim_out + j) * dim_in / 2 + threadIdx.x;
-        half2 sum = __float2half2_rn(0);
+    half2 sum = __float2half2_rn(0);
 
-        for (int i = 0; (i + threadIdx.x) * 2 < dim_in; i += blockDim.x) {
-            sum = __hfma2(__ldg(vec + base_v + i), mat[base_mat + i], sum);
-        }
-        float v = (float)sum.x + (float)sum.y;
-        v = blockReduceSum(v);
-        if (threadIdx.x == 0) {
-            out[blockIdx.x * dim_out + j] = __float2half(v);
-        }
+    for (int i = threadIdx.x; i  < half_dim_in; i += blockDim.x) {
+        sum = __hfma2(vec[base_v + i], mat[base_mat + i], sum);
+    }
+    float v = (float)sum.x + (float)sum.y;
+    v = blockReduceSum(v);
+    if (threadIdx.x == 0) {
+        out[blockIdx.x * dim_out + blockIdx.y] = __float2half(v);
     }
 }
 
@@ -115,7 +112,7 @@ CPM_KERNEL_EXPORT void cu_gemv_fp16_transpose(
         float local_sum = 0;
         for (int j = 0; j < WARP_SZ * WARP_SZ && i + j < dim_in; j += WARP_SZ) {    // warp block
             float v = 0;
-            if (i + j + threadIdx.y < dim_in && col < dim_out) v = (float)__ldg(vec + base_idx + i + j) * (float)mat[(base_idx + i + j) * dim_out + col];
+            if (i + j + threadIdx.y < dim_in && col < dim_out) v = (float)vec[base_idx + i + j] * (float)mat[(base_idx + i + j) * dim_out + col];
             v = transposeReduceSum(v);
             if (threadIdx.y * WARP_SZ == j) {
                 local_sum = v;
@@ -130,7 +127,7 @@ CPM_KERNEL_EXPORT void cu_gemv_fp16_transpose(
     }
 }
 
-// block <batch>,   thread <min(1024, round_up(dim_in // 2, 32))>
+// block <batch, dim_out>,      thread <min(1024, round_up(dim_in // 2, 32))>
 CPM_KERNEL_EXPORT void cu_gemv_broadcast_mat_fp16(
     int32_t batch, int32_t dim_out, int32_t dim_in,
     const half2 *mat,                  //  <dim_out, dim_in>
@@ -139,19 +136,17 @@ CPM_KERNEL_EXPORT void cu_gemv_broadcast_mat_fp16(
 ) {
     int32_t half_dim_in = dim_in >> 1;
     int32_t base_vec_idx = blockIdx.x * half_dim_in + threadIdx.x;
+    int32_t base_mat = blockIdx.y * half_dim_in + threadIdx.x;
 
-    for (int j = 0; j < dim_out; j ++) {
-        int32_t base_mat = j * half_dim_in + threadIdx.x;
-        half2 sum = __float2half2_rn(0);
-        for (int i = 0; i < half_dim_in; i += blockDim.x) {
-            if (i + threadIdx.x < half_dim_in) {
-                sum = __hfma2(__ldg(vec + base_vec_idx + i), mat[base_mat + i], sum);
-            }
+    half2 sum = __float2half2_rn(0);
+    for (int i = 0; i < half_dim_in; i += blockDim.x) {
+        if (i + threadIdx.x < half_dim_in) {
+            sum = __hfma2(vec[base_vec_idx + i], mat[base_mat + i], sum);
         }
-        float v = (float)sum.x + (float)sum.y;
-        v = blockReduceSum(v);
-        if (threadIdx.x == 0) {
-            out[blockIdx.x * dim_out + j] = __float2half(v);
-        }
+    }
+    float v = (float)sum.x + (float)sum.y;
+    v = blockReduceSum(v);
+    if (threadIdx.x == 0) {
+        out[blockIdx.x * dim_out + blockIdx.y] = __float2half(v);
     }
 }

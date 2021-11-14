@@ -6,7 +6,6 @@
                 "cuda/includes",
             ],
             "defines": [
-                "__CUDA_ARCH__=610"
             ],
             "compilerPath": "/usr/local/cuda/bin/nvcc",
             "cStandard": "gnu17",

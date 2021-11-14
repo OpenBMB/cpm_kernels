@@ -13,7 +13,7 @@ CPM_KERNEL_EXPORT void cu_gemm_round(
     half local_scale = scale[blockIdx.x * n + blockIdx.y];
 
     for (int32_t i = threadIdx.x; i < m; i += blockDim.x) {
-        out[base_idx + i] = (int8_t)nearbyintf((float)(__ldg(mat + base_idx + i) / local_scale)); 
+        out[base_idx + i] = (int8_t)nearbyintf((float)__ldg(mat + base_idx + i) / (float)local_scale); 
     }
 }
 
@@ -28,7 +28,7 @@ CPM_KERNEL_EXPORT void cu_gemm_round_transpose(
     int32_t base_idx = (blockIdx.x * n + blockIdx.y) * m;   // mat[batch][n][m], scale[batch][m]
 
     for (int32_t i = threadIdx.x; i < m; i += blockDim.x) {
-        out[base_idx + i] = (int8_t)nearbyintf((float)(mat[base_idx + i] / __ldg(scale + blockIdx.x * m + i)));
+        out[base_idx + i] = (int8_t)nearbyintf((float)mat[base_idx + i] / (float)__ldg(scale + blockIdx.x * m + i));
     }
 }
 
@@ -49,14 +49,10 @@ CPM_KERNEL_EXPORT void cu_gemm_scale(
     } else {
         scale_x_value = (float)__ldg(scale_x + blockIdx.x * n + blockIdx.y);
     }
+    const half* base_scale_y = broad_cast_y ? scale_y : (scale_y + blockIdx.x * m);
 
     for (int32_t i = threadIdx.x; i < m; i += blockDim.x){
-        if (broad_cast_y) {
-            out[base_idx + i] = __float2half((float)(mat[base_idx + i]) * scale_x_value * (float)__ldg(scale_y + i));
-        }
-        else {
-            out[base_idx + i] = __float2half((float)(mat[base_idx + i]) * scale_x_value * (float)__ldg(scale_y + blockIdx.x * m + i));
-        }
+        out[base_idx + i] = __float2half((float)mat[base_idx + i] * scale_x_value * (float)__ldg(base_scale_y + i));
     }
 }
 
@@ -69,13 +65,8 @@ CPM_KERNEL_EXPORT void cu_gemm_calc_scale(
     float local_max = 0;
 
     int32_t base_idx = (blockIdx.x * n + blockIdx.y) * m;
-    for (int32_t i = 0; i < m; i += blockDim.x){
-        int32_t offset = threadIdx.x + i;
-        float v = 0;
-        if (offset < m) {
-            v = fabsf((float)(mat[base_idx + offset]));
-        }
-        local_max = fmaxf(v, local_max);
+    for (int32_t i = threadIdx.x; i < m; i += blockDim.x){
+        local_max = fmaxf(fabsf((float)(mat[base_idx + i])), local_max);
     }
     local_max = blockReduceMax(local_max);
 
