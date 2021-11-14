@@ -1,4 +1,6 @@
 from .base import Kernel, DevicePointer, CUDAStream, round_up
+from ..library import cublaslt
+from ..device import current_device
 import ctypes
 
 gemv_kernel = Kernel(
@@ -76,6 +78,7 @@ def gemv_broadcast_mat_int8(
         ]
     )
 
+
 def gemv_fp16(
     batch : int, dim_out : int, dim_in : int,
     mat : DevicePointer,                # (batch, dim_out, dim_in) fp16
@@ -83,6 +86,38 @@ def gemv_fp16(
     out : DevicePointer,                # (batch, dim_out)  fp16
     stream : CUDAStream
 ):
+    device = current_device()
+    device.use()
+    layoutA = cublaslt.cublasLtMatrixLayoutCreate(cublaslt.CUDA_R_16F, dim_in, dim_out, dim_in)
+    layoutB = cublaslt.cublasLtMatrixLayoutCreate(cublaslt.CUDA_R_16F, dim_in, 1, dim_in)
+    layoutC = cublaslt.cublasLtMatrixLayoutCreate(cublaslt.CUDA_R_16F, dim_out, 1, dim_out)
+    cublaslt.cublasLtMatrixLayoutSetAttribute(layoutA, cublaslt.CUBLASLT_MATRIX_LAYOUT_BATCH_COUNT, ctypes.c_int32(batch))
+    cublaslt.cublasLtMatrixLayoutSetAttribute(layoutA, cublaslt.CUBLASLT_MATRIX_LAYOUT_STRIDED_BATCH_OFFSET, ctypes.c_int64(dim_in * dim_out))
+    cublaslt.cublasLtMatrixLayoutSetAttribute(layoutB, cublaslt.CUBLASLT_MATRIX_LAYOUT_BATCH_COUNT, ctypes.c_int32(batch))
+    cublaslt.cublasLtMatrixLayoutSetAttribute(layoutB, cublaslt.CUBLASLT_MATRIX_LAYOUT_STRIDED_BATCH_OFFSET, ctypes.c_int64(dim_in))
+    cublaslt.cublasLtMatrixLayoutSetAttribute(layoutC, cublaslt.CUBLASLT_MATRIX_LAYOUT_BATCH_COUNT, ctypes.c_int32(batch))
+    cublaslt.cublasLtMatrixLayoutSetAttribute(layoutC, cublaslt.CUBLASLT_MATRIX_LAYOUT_STRIDED_BATCH_OFFSET, ctypes.c_int64(dim_out))
+    if cublaslt.version >= 11000:
+        matmulHandle = cublaslt.cublasLtMatmulDescCreate(cublaslt.CUBLAS_COMPUTE_16F, cublaslt.CUDA_R_16F)
+    else:
+        matmulHandle = cublaslt.cublasLtMatmulDescCreate(cublaslt.CUDA_R_16F)
+    cublaslt.cublasLtMatmulDescSetAttribute(matmulHandle, cublaslt.CUBLASLT_MATMUL_DESC_TRANSA, ctypes.c_int32(cublaslt.CUBLAS_OP_T))
+    cublaslt.cublasLtMatmul(
+        device.cublasLtHandle,
+        matmulHandle,
+        ctypes.c_short(15360),  # half(1)
+        mat, layoutA,
+        vec, layoutB,
+        ctypes.c_short(0),      # half(0)
+        out, layoutC,
+        out, layoutC,
+        stream
+    )
+    cublaslt.cublasLtMatmulDescDestroy(matmulHandle)
+    cublaslt.cublasLtMatrixLayoutDestroy(layoutA)
+    cublaslt.cublasLtMatrixLayoutDestroy(layoutB)
+    cublaslt.cublasLtMatrixLayoutDestroy(layoutC)
+    """ CUDA IMPL
     assert dim_in % 2 == 0
     gridDim = (batch, dim_out, 1)
     blockDim = (min(1024, round_up(dim_in // 2, 32)), 1, 1)
@@ -96,6 +131,7 @@ def gemv_fp16(
             ctypes.c_void_p(out)
         ]
     )
+    """
 
 
 def gemv_fp16_transpose(
@@ -105,6 +141,37 @@ def gemv_fp16_transpose(
     out : DevicePointer,                # (batch, dim_out)  fp16
     stream : CUDAStream
 ):
+    device = current_device()
+    device.use()
+    layoutA = cublaslt.cublasLtMatrixLayoutCreate(cublaslt.CUDA_R_16F, dim_out, dim_in, dim_out)
+    layoutB = cublaslt.cublasLtMatrixLayoutCreate(cublaslt.CUDA_R_16F, dim_in, 1, dim_in)
+    layoutC = cublaslt.cublasLtMatrixLayoutCreate(cublaslt.CUDA_R_16F, dim_out, 1, dim_out)
+    cublaslt.cublasLtMatrixLayoutSetAttribute(layoutA, cublaslt.CUBLASLT_MATRIX_LAYOUT_BATCH_COUNT, ctypes.c_int32(batch))
+    cublaslt.cublasLtMatrixLayoutSetAttribute(layoutA, cublaslt.CUBLASLT_MATRIX_LAYOUT_STRIDED_BATCH_OFFSET, ctypes.c_int64(dim_in * dim_out))
+    cublaslt.cublasLtMatrixLayoutSetAttribute(layoutB, cublaslt.CUBLASLT_MATRIX_LAYOUT_BATCH_COUNT, ctypes.c_int32(batch))
+    cublaslt.cublasLtMatrixLayoutSetAttribute(layoutB, cublaslt.CUBLASLT_MATRIX_LAYOUT_STRIDED_BATCH_OFFSET, ctypes.c_int64(dim_in))
+    cublaslt.cublasLtMatrixLayoutSetAttribute(layoutC, cublaslt.CUBLASLT_MATRIX_LAYOUT_BATCH_COUNT, ctypes.c_int32(batch))
+    cublaslt.cublasLtMatrixLayoutSetAttribute(layoutC, cublaslt.CUBLASLT_MATRIX_LAYOUT_STRIDED_BATCH_OFFSET, ctypes.c_int64(dim_out))
+    if cublaslt.version >= 11000:
+        matmulHandle = cublaslt.cublasLtMatmulDescCreate(cublaslt.CUBLAS_COMPUTE_16F, cublaslt.CUDA_R_16F)
+    else:
+        matmulHandle = cublaslt.cublasLtMatmulDescCreate(cublaslt.CUDA_R_16F)
+    cublaslt.cublasLtMatmul(
+        device.cublasLtHandle,
+        matmulHandle,
+        ctypes.c_short(15360),  # half(1)
+        mat, layoutA,
+        vec, layoutB,
+        ctypes.c_short(0),      # half(0)
+        out, layoutC,
+        out, layoutC,
+        stream
+    )
+    cublaslt.cublasLtMatmulDescDestroy(matmulHandle)
+    cublaslt.cublasLtMatrixLayoutDestroy(layoutA)
+    cublaslt.cublasLtMatrixLayoutDestroy(layoutB)
+    cublaslt.cublasLtMatrixLayoutDestroy(layoutC)
+    """ CUDA IMPL
     gridDim = (batch, round_up(dim_out, 32) // 32, 1)
     blockDim = (32, 32, 1)
     gemv_kernel.cu_gemv_fp16_transpose(
@@ -117,6 +184,7 @@ def gemv_fp16_transpose(
             ctypes.c_void_p(out)
         ]
     )
+    """
 
 def gemv_broadcast_mat_fp16(
     batch : int, dim_out : int, dim_in : int,
@@ -125,6 +193,38 @@ def gemv_broadcast_mat_fp16(
     out : DevicePointer,                # (batch, dim_out)
     stream : CUDAStream
 ):
+    device = current_device()
+    device.use()
+    layoutA = cublaslt.cublasLtMatrixLayoutCreate(cublaslt.CUDA_R_16F, dim_in, dim_out, dim_in)
+    layoutB = cublaslt.cublasLtMatrixLayoutCreate(cublaslt.CUDA_R_16F, dim_in, 1, dim_in)
+    layoutC = cublaslt.cublasLtMatrixLayoutCreate(cublaslt.CUDA_R_16F, dim_out, 1, dim_out)
+    cublaslt.cublasLtMatrixLayoutSetAttribute(layoutA, cublaslt.CUBLASLT_MATRIX_LAYOUT_BATCH_COUNT, ctypes.c_int32(batch))
+    cublaslt.cublasLtMatrixLayoutSetAttribute(layoutA, cublaslt.CUBLASLT_MATRIX_LAYOUT_STRIDED_BATCH_OFFSET, ctypes.c_int64(0))
+    cublaslt.cublasLtMatrixLayoutSetAttribute(layoutB, cublaslt.CUBLASLT_MATRIX_LAYOUT_BATCH_COUNT, ctypes.c_int32(batch))
+    cublaslt.cublasLtMatrixLayoutSetAttribute(layoutB, cublaslt.CUBLASLT_MATRIX_LAYOUT_STRIDED_BATCH_OFFSET, ctypes.c_int64(dim_in))
+    cublaslt.cublasLtMatrixLayoutSetAttribute(layoutC, cublaslt.CUBLASLT_MATRIX_LAYOUT_BATCH_COUNT, ctypes.c_int32(batch))
+    cublaslt.cublasLtMatrixLayoutSetAttribute(layoutC, cublaslt.CUBLASLT_MATRIX_LAYOUT_STRIDED_BATCH_OFFSET, ctypes.c_int64(dim_out))
+    if cublaslt.version >= 11000:
+        matmulHandle = cublaslt.cublasLtMatmulDescCreate(cublaslt.CUBLAS_COMPUTE_16F, cublaslt.CUDA_R_16F)
+    else:
+        matmulHandle = cublaslt.cublasLtMatmulDescCreate(cublaslt.CUDA_R_16F)
+    cublaslt.cublasLtMatmulDescSetAttribute(matmulHandle, cublaslt.CUBLASLT_MATMUL_DESC_TRANSA, ctypes.c_int32(cublaslt.CUBLAS_OP_T))
+    cublaslt.cublasLtMatmul(
+        device.cublasLtHandle,
+        matmulHandle,
+        ctypes.c_short(15360),  # half(1)
+        mat, layoutA,
+        vec, layoutB,
+        ctypes.c_short(0),      # half(0)
+        out, layoutC,
+        out, layoutC,
+        stream
+    )
+    cublaslt.cublasLtMatmulDescDestroy(matmulHandle)
+    cublaslt.cublasLtMatrixLayoutDestroy(layoutA)
+    cublaslt.cublasLtMatrixLayoutDestroy(layoutB)
+    cublaslt.cublasLtMatrixLayoutDestroy(layoutC)
+    """ CUDA IMPL
     assert dim_in % 2 == 0
     gridDim = (batch, dim_out, 1)
     blockDim = (min(1024, round_up(dim_in // 2, 32)), 1, 1)
@@ -138,3 +238,4 @@ def gemv_broadcast_mat_fp16(
             ctypes.c_void_p(out)
         ]
     )
+    """

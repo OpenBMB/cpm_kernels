@@ -180,6 +180,10 @@ def gemm_int8(
         out, layoutC,
         stream
     )
+    cublaslt.cublasLtMatmulDescDestroy(matmulHandle)
+    cublaslt.cublasLtMatrixLayoutDestroy(layoutA)
+    cublaslt.cublasLtMatrixLayoutDestroy(layoutB)
+    cublaslt.cublasLtMatrixLayoutDestroy(layoutC)
 
 def gemm_fp16(
         m : int, k : int, n : int,
@@ -237,6 +241,10 @@ def gemm_fp16(
         out, layoutC,
         stream
     )
+    cublaslt.cublasLtMatmulDescDestroy(matmulHandle)
+    cublaslt.cublasLtMatrixLayoutDestroy(layoutA)
+    cublaslt.cublasLtMatrixLayoutDestroy(layoutB)
+    cublaslt.cublasLtMatrixLayoutDestroy(layoutC)
 
 
 ##### Backward

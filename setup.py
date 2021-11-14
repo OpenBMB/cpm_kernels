@@ -4,7 +4,7 @@ from glob import glob
 if __name__ == "__main__":
     setup(
         name='cpm_kernels',
-        version='1.0.0a14',
+        version='1.0.0a15',
         packages=find_packages(),
         description='CPM CUDA kernels',
         long_description=open("./README.md", 'r').read(),

@@ -56,7 +56,7 @@ class TestGemv(unittest.TestCase):
                     torch.cuda.current_stream().cuda_stream
                 )
                 ans = ct.bmm( vec.unsqueeze(0), False, mat.unsqueeze(0), True , int8=True)
-                self.assertTrue(torch.isclose(out, ans, 1e-3, 1e-3).all())
+                self.assertTrue(torch.isclose(out, ans, 1e-5, 1e-5).all())
 
     def test_gemv_fp16(self):
         with torch.cuda.device(2):
@@ -78,7 +78,7 @@ class TestGemv(unittest.TestCase):
                     torch.cuda.current_stream().cuda_stream
                 )
                 ans = ct.bmm( mat, False, vec, False , int8=False)[:, :, 0]
-                self.assertTrue(torch.isclose(out, ans, 5e-2, 5e-2).all())
+                self.assertTrue(torch.isclose(out, ans, 1e-5, 1e-5).all())
 
     def test_gemv_fp16_transpose(self):
         with torch.cuda.device(2):
@@ -101,27 +101,29 @@ class TestGemv(unittest.TestCase):
                 )
 
                 ans = ct.bmm( mat, True, vec, False , int8=False)[:, :, 0]
-                self.assertTrue(torch.isclose(out, ans, 5e-2, 5e-2).all())
+                self.assertTrue(torch.isclose(out, ans, 1e-5, 1e-5).all())
 
     def test_gemv_logits(self):
         with torch.cuda.device(2):
-            for _ in range(10):
+            for _ in range(5):
                 BATCH = 16
                 N = 22222
                 M = 4444
                 ssk = math.sqrt(math.sqrt(M))
                 mat = torch.randn(N, M, dtype=torch.half, device="cuda") / ssk
-                vec = torch.randn(BATCH, M, dtype=torch.half, device="cuda") / ssk
+                vec = torch.randn(BATCH, M, 4, dtype=torch.half, device="cuda") / ssk
 
-            
-                out = torch.empty(BATCH, N, dtype=torch.half, device="cuda")
-                ck.gemv_broadcast_mat_fp16(
-                    BATCH, N, M,
-                    mat.data_ptr(),
-                    vec.data_ptr(),
-                    out.data_ptr(),
-                    torch.cuda.current_stream().cuda_stream
-                )
+                vecs = [vec[:, :, i].contiguous() for i in range(vec.size(2))]
+                ans = ct.bmm(mat.unsqueeze(0), False, vec, False, int8=False)
 
-                ans = ct.bmm( vec.unsqueeze(0), False, mat.unsqueeze(0), True , int8=False)
-                self.assertTrue(torch.isclose(out, ans, 5e-2, 5e-2).all())
+                for i, vec_0 in enumerate(vecs):
+                    out_0 = torch.empty(BATCH, N, dtype=torch.half, device="cuda")
+                    ck.gemv_broadcast_mat_fp16(
+                        BATCH, N, M,
+                        mat.data_ptr(),
+                        vec_0.data_ptr(),
+                        out_0.data_ptr(),
+                        torch.cuda.current_stream().cuda_stream
+                    )
+                    ans_0 = ans[:, :, i].contiguous()
+                    self.assertTrue(torch.isclose(out_0, ans_0, 1e-5, 1e-5).all())
