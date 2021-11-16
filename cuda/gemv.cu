@@ -86,12 +86,19 @@ CPM_KERNEL_EXPORT void cu_gemv_fp16(
     int32_t base_v = blockIdx.x * half_dim_in;
     int32_t base_mat = (blockIdx.x * dim_out + blockIdx.y) * half_dim_in;
 
+#if __CUDA_ARCH__ >= 620 || !defined(__CUDA_ARCH__)
     half2 sum = __float2half2_rn(0);
-
     for (int i = threadIdx.x; i  < half_dim_in; i += blockDim.x) {
         sum = __hfma2(vec[base_v + i], mat[base_mat + i], sum);
     }
     float v = (float)sum.x + (float)sum.y;
+#else
+    // fallback to fp32
+    float v = 0;
+    for (int i = threadIdx.x; i < half_dim_in; i += blockDim.x) {
+        v += (float)vec[base_v + i].x * (float)mat[base_mat + i].x + (float)vec[base_v + i].y * (float)mat[base_mat + i].y;
+    }
+#endif
     v = blockReduceSum(v);
     if (threadIdx.x == 0) {
         out[blockIdx.x * dim_out + blockIdx.y] = __float2half(v);
@@ -135,16 +142,21 @@ CPM_KERNEL_EXPORT void cu_gemv_broadcast_mat_fp16(
     half *out                          //  <batch, dim_out>
 ) {
     int32_t half_dim_in = dim_in >> 1;
-    int32_t base_vec_idx = blockIdx.x * half_dim_in + threadIdx.x;
-    int32_t base_mat = blockIdx.y * half_dim_in + threadIdx.x;
+    int32_t base_vec_idx = blockIdx.x * half_dim_in;
+    int32_t base_mat = blockIdx.y * half_dim_in;
 
+#if __CUDA_ARCH__ >= 620 || !defined(__CUDA_ARCH__)
     half2 sum = __float2half2_rn(0);
-    for (int i = 0; i < half_dim_in; i += blockDim.x) {
-        if (i + threadIdx.x < half_dim_in) {
-            sum = __hfma2(vec[base_vec_idx + i], mat[base_mat + i], sum);
-        }
+    for (int i = threadIdx.x; i < half_dim_in; i += blockDim.x) {
+        sum = __hfma2(vec[base_vec_idx + i], mat[base_mat + i], sum);
     }
     float v = (float)sum.x + (float)sum.y;
+#else
+    float v = 0;
+    for (int i = threadIdx.x; i < half_dim_in; i += blockDim.x) {
+        v += (float)vec[base_vec_idx + i].x * (float)mat[base_mat + i].x + (float)vec[base_vec_idx + i].y * (float)mat[base_mat + i].y;
+    }
+#endif
     v = blockReduceSum(v);
     if (threadIdx.x == 0) {
         out[blockIdx.x * dim_out + blockIdx.y] = __float2half(v);

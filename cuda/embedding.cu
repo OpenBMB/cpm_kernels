@@ -2,7 +2,7 @@
 #include "common.h"
 #include <cuda_fp16.h>
 
-// block <batch, m / 32>,   thread <32, 32>
+// block <batch, m / 32, n / 32>,   thread <32, 32>
 CPM_KERNEL_EXPORT void cu_embedding_forward(
     int32_t batch, int32_t n, int32_t m,
     const int32_t *ids,     // (batch, m)
@@ -13,23 +13,23 @@ CPM_KERNEL_EXPORT void cu_embedding_forward(
 
     int32_t col_in_idx = blockIdx.y * WARP_SZ + threadIdx.y;
     int32_t col_out_idx = blockIdx.y * WARP_SZ + threadIdx.x;
+    int32_t offset_n = blockIdx.z * WARP_SZ;
     const half *base_weight =  weights + (col_in_idx < m ? (ids[blockIdx.x * m + col_in_idx] * n) : 0) + threadIdx.x;
 
     int32_t base_out_idx = blockIdx.x * n * m + threadIdx.y * m + col_out_idx;
-    for (int i = 0; i < n; i += WARP_SZ) {
-        if (i + threadIdx.x < n) {
-            shared[threadIdx.y][threadIdx.x] = __ldg(base_weight + i);
-        } else {
-            shared[threadIdx.y][threadIdx.x] = __float2half(0);
-        }
-        // load multiple data from weights
-        __syncthreads();
-        // write multiple data to out (blockIdx.x, i + threadIdx.y, col_idx)
-        if (i + threadIdx.y < n && col_out_idx < m) {
-            out[ base_out_idx + i * m ] = shared[threadIdx.x][threadIdx.y];
-        }
-        __syncthreads();
+
+    if (offset_n + threadIdx.x < n) {
+        shared[threadIdx.y][threadIdx.x] = __ldg(base_weight + offset_n);
+    } else {
+        shared[threadIdx.y][threadIdx.x] = __float2half(0);
     }
+    // load multiple data from weights
+    __syncthreads();
+    // write multiple data to out (blockIdx.x, i + threadIdx.y, col_idx)
+    if (offset_n + threadIdx.y < n && col_out_idx < m) {
+        out[ base_out_idx + offset_n * m ] = shared[threadIdx.x][threadIdx.y];
+    }
+
 }
 
 // block <batch, m / 1024>    thread<1024>

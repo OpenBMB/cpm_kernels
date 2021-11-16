@@ -20,7 +20,7 @@ def embedding_forward(
     out : DevicePointer,        # (batch, n, m)
     stream : CUDAStream
 ):
-    gridDim = (batch, round_up(seq_len, 32) // 32, 1)
+    gridDim = (batch, round_up(seq_len, 32) // 32, round_up(hidden_size, 32) // 32)
     blockDim = (32, 32, 1)
     embedding_kernel.cu_embedding_forward(
         gridDim, blockDim, 0, stream, [

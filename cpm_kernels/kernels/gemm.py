@@ -222,21 +222,30 @@ def gemm_fp16(
     cublaslt.cublasLtMatrixLayoutSetAttribute(layoutC, cublaslt.CUBLASLT_MATRIX_LAYOUT_BATCH_COUNT, ctypes.c_int32(batchC))
     cublaslt.cublasLtMatrixLayoutSetAttribute(layoutC, cublaslt.CUBLASLT_MATRIX_LAYOUT_STRIDED_BATCH_OFFSET, ctypes.c_int64(strideC))
 
+    fallback_32f = device.architecture < 62
+
     if cublaslt.version >= 11000:
-        matmulHandle = cublaslt.cublasLtMatmulDescCreate(cublaslt.CUBLAS_COMPUTE_16F, cublaslt.CUDA_R_16F)
+        if fallback_32f:
+            matmulHandle = cublaslt.cublasLtMatmulDescCreate(cublaslt.CUBLAS_COMPUTE_32F, cublaslt.CUDA_R_32F)
+        else:
+            matmulHandle = cublaslt.cublasLtMatmulDescCreate(cublaslt.CUBLAS_COMPUTE_16F, cublaslt.CUDA_R_16F)
     else:
-        matmulHandle = cublaslt.cublasLtMatmulDescCreate(cublaslt.CUDA_R_16F)
+        if fallback_32f:
+            matmulHandle = cublaslt.cublasLtMatmulDescCreate(cublaslt.CUDA_R_32F)
+        else:
+            matmulHandle = cublaslt.cublasLtMatmulDescCreate(cublaslt.CUDA_R_16F)
     if aT:
         cublaslt.cublasLtMatmulDescSetAttribute(matmulHandle, cublaslt.CUBLASLT_MATMUL_DESC_TRANSA, ctypes.c_int32(cublaslt.CUBLAS_OP_T))
     if bT:
         cublaslt.cublasLtMatmulDescSetAttribute(matmulHandle, cublaslt.CUBLASLT_MATMUL_DESC_TRANSB, ctypes.c_int32(cublaslt.CUBLAS_OP_T))
+
     cublaslt.cublasLtMatmul(
         device.cublasLtHandle,
         matmulHandle,
-        ctypes.c_short(15360),  # half(1)
+        ctypes.c_float(1) if fallback_32f else ctypes.c_short(15360),  # half(1)
         A, layoutA,
         B, layoutB,
-        ctypes.c_short(0),      # half(0)
+        ctypes.c_float(0) if fallback_32f else ctypes.c_short(0),      # half(0)
         out, layoutC,
         out, layoutC,
         stream
