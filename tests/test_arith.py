@@ -342,21 +342,42 @@ class TestArith(unittest.TestCase):
                 (21 * 66, 2),
                 (11 * 3, 10)
             ]:
-                x = torch.randn(*shape, device="cuda").half()
+                x = torch.randn(*shape, 2, device="cuda").half()
                 alpha = (torch.randn(shape[1], device="cuda").half() + 10) / 5
                 beta = torch.randn(shape[1], device="cuda").half()
 
-                ans = x * alpha + beta
+                ans = torch.empty(shape + (2,), dtype=torch.half, device="cuda")
+                ck.arith_ln_mul_add(
+                    shape[0], shape[1], 2,
+                    x.data_ptr(),
+                    alpha.data_ptr(),
+                    beta.data_ptr(),
+                    ans.data_ptr(),
+                    torch.cuda.current_stream().cuda_stream
+                )
+
+                x_0, x_1 = x[:, :, 0].contiguous(), x[:, :, 1].contiguous()
+                
                 out = torch.empty( shape, dtype=torch.half, device="cuda")
                 ck.arith_batch_mul_add(
                     shape[0], shape[1],
-                    x.data_ptr(),
+                    x_0.data_ptr(),
                     alpha.data_ptr(),
                     beta.data_ptr(),
                     out.data_ptr(),
                     torch.cuda.current_stream().cuda_stream
                 )
-                self.assertTrue(torch.isclose(out, ans, 1e-2, 1e-2).all())
+                self.assertTrue(torch.isclose(out, ans[:, :, 0], 1e-5, 1e-5).all())
+
+                ck.arith_batch_mul_add(
+                    shape[0], shape[1],
+                    x_1.data_ptr(),
+                    alpha.data_ptr(),
+                    beta.data_ptr(),
+                    out.data_ptr(),
+                    torch.cuda.current_stream().cuda_stream
+                )
+                self.assertTrue(torch.isclose(out, ans[:, :, 1], 1e-5, 1e-5).all())
     
     def test_batched_mul(self):
         with torch.cuda.device(3):
@@ -370,16 +391,34 @@ class TestArith(unittest.TestCase):
                 (21 * 66, 2),
                 (11 * 3, 10)
             ]:
-                x = torch.randn(*shape, device="cuda").half()
+                x = torch.randn(*shape, 2, device="cuda").half()
                 alpha = torch.randn(shape[1], device="cuda").half()
 
-                ans = x * alpha
+                ans = torch.empty(shape + (2,), dtype=torch.half, device="cuda")
+                ck.arith_ln_mul(
+                    shape[0], shape[1], 2,
+                    x.data_ptr(),
+                    alpha.data_ptr(),
+                    ans.data_ptr(),
+                    torch.cuda.current_stream().cuda_stream
+                )
+
+                x_0, x_1 = x[:, :, 0].contiguous(), x[:, :, 1].contiguous()
+
                 out = torch.empty( shape, dtype=torch.half, device="cuda")
                 ck.arith_batch_mul(
                     shape[0], shape[1],
-                    x.data_ptr(),
+                    x_0.data_ptr(),
                     alpha.data_ptr(),
                     out.data_ptr(),
                     torch.cuda.current_stream().cuda_stream
                 )
-                self.assertTrue(torch.isclose(out, ans, 1e-2, 1e-2).all())
+                self.assertTrue(torch.isclose(out, ans[:, :, 0], 1e-5, 1e-5).all())
+                ck.arith_batch_mul(
+                    shape[0], shape[1],
+                    x_1.data_ptr(),
+                    alpha.data_ptr(),
+                    out.data_ptr(),
+                    torch.cuda.current_stream().cuda_stream
+                )
+                self.assertTrue(torch.isclose(out, ans[:, :, 1], 1e-5, 1e-5).all())

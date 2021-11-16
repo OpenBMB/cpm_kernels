@@ -59,11 +59,18 @@ class TestSoftmax(unittest.TestCase):
                 (3, 12321)
             ]:
                 x = torch.randn(*shape, device="cuda").half()
-                ans = torch.softmax(x, dim=1)
+                
+                ans = torch.empty(shape, dtype=torch.half, device="cuda")
+                ck.softmax_forward(
+                    shape[0], shape[1], 1,
+                    x.data_ptr(),
+                    ans.data_ptr(),
+                    torch.cuda.current_stream().cuda_stream
+                )
                 ck.softmax_step_inplace(
                     shape[0], shape[1],
                     x.data_ptr(),
                     torch.cuda.current_stream().cuda_stream
                 )
 
-                self.assertTrue(torch.isclose(x, ans, 1e-3, 1e-3).all())
+                self.assertTrue(torch.isclose(x, ans, 1e-5, 1e-5).all())

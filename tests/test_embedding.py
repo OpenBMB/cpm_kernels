@@ -14,7 +14,7 @@ TEST_CASE = [
 
 class TestEmbedding(unittest.TestCase):
     def test_embedding(self):
-        with torch.cuda.device(0):
+        with torch.cuda.device(2):
             # Test the embedding layer.
             for args in TEST_CASE:
                 vocab_size, hidden_size, batch, seq_len = args
@@ -43,23 +43,27 @@ class TestEmbedding(unittest.TestCase):
                 self.assertTrue(torch.isclose(cpm_emb.weight.grad, pth_emb.weight.grad, 1e-3, 1e-3).all())
                 
     def test_embedding_step(self):
-        with torch.cuda.device(0):
+        with torch.cuda.device(2):
             for args in TEST_CASE:
                 vocab_size, hidden_size, batch, _ = args
                 weight = torch.randn(vocab_size, hidden_size, dtype=torch.half, device="cuda")
-                ipt = torch.randint(0, vocab_size, (batch,), dtype=torch.long).to("cuda")
+                ipt = torch.randint(0, vocab_size, (batch,), dtype=torch.int32).to("cuda")
 
-                ans = torch.embedding(
-                    weight,
-                    ipt
+                ans = torch.empty((batch, hidden_size), dtype=torch.half, device="cuda")
+                ck.embedding_forward(
+                    batch, hidden_size, 1,
+                    ipt.data_ptr(),
+                    weight.data_ptr(),
+                    ans.data_ptr(),
+                    torch.cuda.current_stream().cuda_stream
                 )
                 out = torch.empty((batch, hidden_size), dtype=torch.half, device="cuda")
                 ck.embedding_step(
                     batch, hidden_size,
-                    ipt.to(torch.int32).data_ptr(),
+                    ipt.data_ptr(),
                     weight.data_ptr(),
                     out.data_ptr(),
                     torch.cuda.current_stream().cuda_stream
                 )
-                self.assertTrue(torch.isclose(out, ans, 1e-3, 1e-3).all())
+                self.assertTrue(torch.isclose(out, ans, 1e-5, 1e-5).all())
                 

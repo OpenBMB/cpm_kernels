@@ -26,5 +26,4 @@ class TestGeLU(unittest.TestCase):
             ans = ct.geluTH(x)
             ct.gelu_inplace(x)
 
-            diff = torch.abs(x - ans).max()
             self.assertTrue(torch.isclose(x, ans, 1e-2, 1e-2).all())

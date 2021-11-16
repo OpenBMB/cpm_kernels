@@ -17,8 +17,9 @@ def gelu_forward(
         out : DevicePointer,
         stream : CUDAStream
     ):
-    gridDim = (batch, 1, 1)
-    blockDim = (min(n, 1024), 1, 1)
+    threads = min(round_up(n, 32), 1024)
+    gridDim = (batch, round_up(n, threads) // threads, 1)
+    blockDim = (threads, 1, 1)
     gelu_kernel.cu_gelu_forward(
         gridDim, blockDim, 0, stream, [
             ctypes.c_int32(batch),
@@ -34,8 +35,9 @@ def gelu_inplace_forward(
         mat :  DevicePointer,
         stream : CUDAStream
     ):
-    gridDim = (batch, 1, 1)
-    blockDim = (min(n, 1024), 1, 1)
+    threads = min(round_up(n, 32), 1024)
+    gridDim = (batch, round_up(n, threads) // threads, 1)
+    blockDim = (threads, 1, 1)
     gelu_kernel.cu_gelu_forward(
         gridDim, blockDim, 0, stream, [
             ctypes.c_int32(batch),
@@ -53,8 +55,9 @@ def gelu_backward(
         grad : DevicePointer,
         stream : CUDAStream
     ):
-    gridDim = (batch, 1, 1)
-    blockDim = (min(n, 1024), 1, 1)
+    threads = min(round_up(n, 32), 1024)
+    gridDim = (batch, round_up(n, threads) // threads, 1)
+    blockDim = (threads, 1, 1)
     gelu_kernel.cu_gelu_backward(
         gridDim, blockDim, 0, stream, [
             ctypes.c_int32(batch),

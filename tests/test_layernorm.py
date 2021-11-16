@@ -122,7 +122,15 @@ class TestLayerNorm(unittest.TestCase):
             ]:
                 for i in range(16):
                     x = torch.randn((128, shape), device="cuda").half()
-                    ans = normalize_stepTH(x, eps, i < 8)
+                    ans = torch.empty(128, shape, device="cuda", dtype=torch.half)
+                    ck.layernorm_forward(
+                        128, shape, 1,
+                        x.data_ptr(),
+                        ans.data_ptr(),
+                        eps,
+                        i < 8,
+                        torch.cuda.current_stream().cuda_stream
+                    )
                     out = torch.empty(128, shape, device="cuda", dtype=torch.half)
                     ck.layernorm_step(
                         128, shape,
@@ -132,8 +140,7 @@ class TestLayerNorm(unittest.TestCase):
                         i < 8,
                         torch.cuda.current_stream().cuda_stream
                     )
-
-                    self.assertTrue(torch.isclose(ans, out, 5e-3, 5e-3).all())
+                    self.assertTrue(torch.isclose(ans, out, 1e-5, 1e-5).all())
 
                     ck.layernorm_step_inplace(
                         128, shape,
@@ -142,4 +149,4 @@ class TestLayerNorm(unittest.TestCase):
                         i < 8,
                         torch.cuda.current_stream().cuda_stream
                     )
-                    self.assertTrue(torch.isclose(ans, x, 5e-3, 5e-3).all())
+                    self.assertTrue(torch.isclose(ans, x, 1e-5, 1e-5).all())
