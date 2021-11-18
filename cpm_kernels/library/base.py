@@ -41,12 +41,14 @@ class Lib:
         self.__name = name
         if sys.platform.startswith("win"):
             lib_path = windows_find_lib(self.__name)
+            self.__lib_path = lib_path
             if lib_path is not None:
                 self.__lib = ctypes.WinDLL(lib_path)
             else:
                 self.__lib = None
         elif sys.platform.startswith("linux"):
             lib_path = unix_find_lib(self.__name)
+            self.__lib_path = lib_path
             if lib_path is not None:
                 self.__lib = ctypes.cdll.LoadLibrary(lib_path)
             else:
@@ -69,7 +71,15 @@ class Lib:
                 return wrapper
             return decorator
         else:
-            func = getattr(self.__lib, name)
+            try:
+                func = getattr(self.__lib, name)
+            except AttributeError:
+                # Name not found in library
+                def decorator(f):
+                    @wraps(f)
+                    def wrapper(*args, **kwargs):
+                        raise AttributeError("%s: undefined symbol: %s" % (self.__lib_path, name))
+                    return wrapper
             func.argtypes = arg_types
             func.restype = ret_type
             setattr(self, name, func)

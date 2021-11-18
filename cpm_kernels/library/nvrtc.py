@@ -77,15 +77,16 @@ def nvrtcCreateProgram(prog : nvrtcProgram, src : str, name : str, numHeaders : 
 def nvrtcDestroyProgram(prog : nvrtcProgram):
     checkNVRTCStatus( nvrtc.nvrtcDestroyProgram( ctypes.byref(prog)) )
 
-@nvrtc.bind("nvrtcGetCUBIN", [nvrtcProgram, ctypes.c_char_p], nvrtcResult)
-def nvrtcGetCUBIN(prog : nvrtcProgram, buf : ctypes.c_char_p):
-    checkNVRTCStatus( nvrtc.nvrtcGetCUBIN(prog, buf) )
+if version[0] >= 11:
+    @nvrtc.bind("nvrtcGetCUBIN", [nvrtcProgram, ctypes.c_char_p], nvrtcResult)
+    def nvrtcGetCUBIN(prog : nvrtcProgram, buf : ctypes.c_char_p):
+        checkNVRTCStatus( nvrtc.nvrtcGetCUBIN(prog, buf) )
 
-@nvrtc.bind("nvrtcGetCUBINSize", [nvrtcProgram, ctypes.POINTER(ctypes.c_size_t)], nvrtcResult)
-def nvrtcGetCUBINSize(prog) -> int:
-    size = ctypes.c_size_t()
-    checkNVRTCStatus( nvrtc.nvrtcGetCUBINSize(prog, ctypes.byref(size)) )
-    return size.value
+    @nvrtc.bind("nvrtcGetCUBINSize", [nvrtcProgram, ctypes.POINTER(ctypes.c_size_t)], nvrtcResult)
+    def nvrtcGetCUBINSize(prog) -> int:
+        size = ctypes.c_size_t()
+        checkNVRTCStatus( nvrtc.nvrtcGetCUBINSize(prog, ctypes.byref(size)) )
+        return size.value
 
 @nvrtc.bind("nvrtcGetPTX", [nvrtcProgram, ctypes.c_char_p], nvrtcResult)
 def nvrtcGetPTX(prog, buf):
