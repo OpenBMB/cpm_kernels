@@ -474,11 +474,12 @@ def cudaLaunchKernel(
         kernelParams = None
     checkCUDAStatus(cuda.cudaLaunchKernel(func, gridDim, blockDim, kernelParams, sharedMem, stream))
 
-@cuda.bind("cudaGetFuncBySymbol", [ctypes.POINTER(ctypes.c_void_p), ctypes.c_void_p], cudaError_t)
-def cudaGetFuncBySymbol(func : ctypes.c_void_p) -> ctypes.c_void_p:
-    ret = ctypes.c_void_p()
-    checkCUDAStatus(cuda.cudaGetFuncBySymbol(ctypes.byref(ret), func))
-    return ret
+if version >= 11000:
+    @cuda.bind("cudaGetFuncBySymbol", [ctypes.POINTER(ctypes.c_void_p), ctypes.c_void_p], cudaError_t)
+    def cudaGetFuncBySymbol(func : ctypes.c_void_p) -> ctypes.c_void_p:
+        ret = ctypes.c_void_p()
+        checkCUDAStatus(cuda.cudaGetFuncBySymbol(ctypes.byref(ret), func))
+        return ret
 
 @cuda.bind("cudaMemsetAsync", [ctypes.c_void_p, ctypes.c_int, ctypes.c_size_t, cudaStream_t], cudaError_t)
 def cudaMemsetAsync(dst : ctypes.c_void_p, value : int, size : int, stream : cudaStream_t) -> None:

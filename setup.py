@@ -1,10 +1,9 @@
 from setuptools import setup, find_packages
-from glob import glob
 
 if __name__ == "__main__":
     setup(
         name='cpm_kernels',
-        version='1.0.6',
+        version='1.0.7',
         packages=find_packages(),
         description='CPM CUDA kernels',
         long_description=open("./README.md", 'r').read(),
