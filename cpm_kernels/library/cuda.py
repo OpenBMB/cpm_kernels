@@ -237,11 +237,12 @@ def cuModuleLoadData(data : bytes) -> CUmodule:
 def cuModuleUnload(module : CUmodule) -> None:
     checkCUStatus(cuda.cuModuleUnload(module))
 
-@cuda.bind("cuModuleGetFunction", [ctypes.POINTER(CUfunction), CUmodule, ctypes.c_char_p], CUresult)
-def cuModuleGetFunction(module : CUmodule, name : str) -> CUfunction:
-    function = CUfunction()
-    checkCUStatus(cuda.cuModuleGetFunction(ctypes.byref(function), module, name.encode()))
-    return function
+if version >= 11000:
+    @cuda.bind("cuModuleGetFunction", [ctypes.POINTER(CUfunction), CUmodule, ctypes.c_char_p], CUresult)
+    def cuModuleGetFunction(module : CUmodule, name : str) -> CUfunction:
+        function = CUfunction()
+        checkCUStatus(cuda.cuModuleGetFunction(ctypes.byref(function), module, name.encode()))
+        return function
 
 ### Execution control
 
