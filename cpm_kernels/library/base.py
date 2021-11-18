@@ -3,7 +3,9 @@ import ctypes
 import ctypes.util
 from functools import wraps
 from typing import Callable, TypeVar
+import logging
 
+logger = logging.getLogger(__name__)
 LibCall = TypeVar("LibCall")
 
 def lookup_dll(prefix):
@@ -80,6 +82,8 @@ class Lib:
                     def wrapper(*args, **kwargs):
                         raise AttributeError("%s: undefined symbol: %s" % (self.__lib_path, name))
                     return wrapper
+                logger.warning("Symbol %s not found in %s", name, self.__lib_path)
+                return decorator
             func.argtypes = arg_types
             func.restype = ret_type
             setattr(self, name, func)
