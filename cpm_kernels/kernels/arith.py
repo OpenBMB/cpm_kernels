@@ -4,6 +4,7 @@ import ctypes
 arith_kernel = Kernel(
     "arith",
     [
+        "cu_arith_global_scale",
         "cu_arith_element_add",
         "cu_arith_element_mul",
         "cu_arith_batch_add_forward",
@@ -19,6 +20,25 @@ arith_kernel = Kernel(
         "cu_arith_batch_mul"
     ]
 )
+
+def arith_global_scale(
+        n : int,
+        inp : DevicePointer,    # (n,) fp16
+        scale : float,
+        out : DevicePointer,    # (n,) fp16
+        stream : CUDAStream
+    ):
+    threads = min(round_up(n, 32), 1024)
+    gridDim = (round_up(n, threads) // threads, 1, 1)
+    blockDim = (threads, 1, 1)
+    arith_kernel.cu_arith_global_scale(
+        gridDim, blockDim, 0, stream, [
+            ctypes.c_int32(n),
+            ctypes.c_void_p(inp),
+            ctypes.c_float(scale),
+            ctypes.c_void_p(out)
+        ]
+    )
 
 def arith_element_add(
         batch : int, n : int,

@@ -3,6 +3,14 @@
 #include <cuda_fp16.h>
 #include "common.h"
 
+__inline__ __device__ bool isnan_(half v) {
+#if __CUDA_ARCH__ >= 700 || __CUDA_ARCH__ == 600
+    return __hisnan(v);
+#else
+    return v != v;
+#endif
+}
+
 // grid <batch>,    thread<min(1024, n // 2)>
 CPM_KERNEL_EXPORT void copy_data_to_kv(
     int32_t batch, int32_t buffer_len, int32_t n,
@@ -56,5 +64,25 @@ CPM_KERNEL_EXPORT void cu_copy_extend_buffer(
     int32_t col = blockIdx.y * blockDim.x + threadIdx.x;
     if (col < old_size) {
         nw_buf[ blockIdx.x * nw_size + col ] = old_buf[ blockIdx.x * old_size + col ];
+    }
+}
+
+// grid <1>,        thread<min(round_up(n, 32), 1024)>
+CPM_KERNEL_EXPORT void cu_has_nan_inf(
+    int32_t n,
+    const half* inp,    // (n,) 
+    int8_t* out
+) {
+    float r = 0;
+    for (int i = threadIdx.x; i < n; i += blockDim.x) {
+        half v = inp[i];
+        if (__hisinf(v) || isnan_(v)) {
+            r = 10;
+            break;
+        }
+    }
+    r = blockReduceSum(r);
+    if (threadIdx.x == 0 && r > 1) {
+        out[0] = 1;
     }
 }

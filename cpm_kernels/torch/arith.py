@@ -1,6 +1,57 @@
 import torch
 from ..kernels import arith
 
+class OpGlobalScale(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x : torch.Tensor, scale : float):
+        assert x.is_cuda and x.is_contiguous() and x.dtype == torch.half
+        out = torch.empty(x.size(), device=x.device, dtype=torch.half)
+
+        arith.arith_global_scale(
+            x.numel(), x.data_ptr(),
+            scale,
+            out.data_ptr(),
+            torch.cuda.current_stream().cuda_stream
+        )
+        ctx.scale = scale
+        return out
+    
+    @staticmethod
+    def backward(ctx, grad_output : torch.Tensor):
+        assert grad_output.is_cuda and grad_output.is_contiguous() and grad_output.dtype == torch.half
+        grad = torch.empty(grad_output.size(), device=grad_output.device, dtype=torch.half)
+        arith.arith_global_scale(
+            grad_output.numel(), grad_output.data_ptr(),
+            ctx.scale,
+            grad.data_ptr(),
+            torch.cuda.current_stream().cuda_stream
+        )
+        return grad, None
+
+def global_scale(x : torch.Tensor, scale : float) -> torch.Tensor:
+    """
+    out = x * scale
+    """
+    return OpGlobalScale.apply(x, scale)
+
+def global_scaleTH(x : torch.Tensor, scale : float) -> torch.Tensor:
+    """
+    out = x * scale
+    """
+    return x * scale
+
+def global_scale_inplace(x : torch.Tensor, scale : float) -> None:
+    """
+    x *= scale
+    """
+    assert x.is_cuda and x.is_contiguous() and x.dtype == torch.half
+    arith.arith_global_scale(
+        x.numel(), x.data_ptr(),
+        scale,
+        x.data_ptr(),
+        torch.cuda.current_stream().cuda_stream
+    )
+
 class OpElementAdd(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x : torch.Tensor, y : torch.Tensor):

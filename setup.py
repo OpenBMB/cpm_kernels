@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 if __name__ == "__main__":
     setup(
         name='cpm_kernels',
-        version='1.0.7',
+        version='1.0.8',
         packages=find_packages(),
         description='CPM CUDA kernels',
         long_description=open("./README.md", 'r').read(),

@@ -2,6 +2,19 @@
 #include "common.h"
 #include <cuda_fp16.h>
 
+// block <n // 1024>,   thread <min(n, 1024)>
+CPM_KERNEL_EXPORT void cu_arith_global_scale(
+    int32_t n,
+    const half *inp,    // (n,)
+    float scale,
+    half *out           // (n,)
+) {
+    int32_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < n) {
+        out[idx] = __float2half(__half2float(inp[idx]) * scale);
+    }
+}
+
 // block <batch_size，n // 1024>,  thread<min(n, 1024)>,  half n
 CPM_KERNEL_EXPORT void cu_arith_element_add (
     int32_t batch, int32_t n,

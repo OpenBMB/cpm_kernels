@@ -8,7 +8,8 @@ utils_kernel = Kernel(
         "copy_data_to_kv",
         "cu_array_add",
         "cu_adjustify_logits",
-        "cu_copy_extend_buffer"
+        "cu_copy_extend_buffer",
+        "cu_has_nan_inf"
     ]
 )
 
@@ -90,5 +91,21 @@ def copy_extend_buffer(
             ctypes.c_int32(nw_size),
             ctypes.c_void_p(old_buffer),
             ctypes.c_void_p(new_buffer)
+        ]
+    )
+
+def has_nan_inf(
+    n : int,
+    inp : DevicePointer,    # (n,)  half
+    out : DevicePointer,    # (1,)  bool
+    stream : CUDAStream
+):
+    gridDim = (1, 1, 1)
+    blockDim = (min(round_up(n, 32), 1024), 1, 1)
+    utils_kernel.cu_has_nan_inf(
+        gridDim, blockDim, 0, stream, [
+            ctypes.c_int32(n),
+            ctypes.c_void_p(inp),
+            ctypes.c_void_p(out)
         ]
     )

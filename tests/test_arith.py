@@ -1,10 +1,41 @@
-from torch.cuda import current_stream
 import cpm_kernels.torch as ct
 import cpm_kernels.kernels as ck
 import torch
 import unittest
+import random
 
 class TestArith(unittest.TestCase):
+    def test_global_scale(self):
+        with torch.cuda.device(3):
+            for shape in [
+                (3, 5, 6),
+                (17, 32, 128),
+                (32, 1024, 4096),
+                (33, 777, 1232),
+                (31, 123, 566),
+                (3, 4, 5, 6, 8),
+                (21, 66, 5, 3, 2),
+                (11, 3, 5, 7, 10)
+            ]:
+                x = torch.randn(*shape, device="cuda").half()
+                scale = random.random() * 10
+
+                x1 = x.clone().requires_grad_()
+                x2 = x.clone().requires_grad_()
+                
+                out = ct.global_scale(x1, scale)
+                ans = ct.global_scaleTH(x2, scale)
+                self.assertTrue(torch.isclose(out, ans, 1e-2, 1e-2).all())
+
+                gradient_start = torch.randn_like(out)
+                out.backward(gradient=gradient_start)
+                ans.backward(gradient=gradient_start)
+
+                self.assertTrue(torch.isclose(x1.grad, x2.grad, 1e-2, 1e-2).all())
+
+                ct.global_scale_inplace(x, scale)
+                self.assertTrue(torch.isclose(x, ans, 1e-2, 1e-2).all())
+
     def test_element_add(self):
         with torch.cuda.device(3):
             for shape in [

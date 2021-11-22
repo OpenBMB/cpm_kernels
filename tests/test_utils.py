@@ -1,8 +1,7 @@
-from torch._C import dtype
+import cpm_kernels.torch as ct
 import cpm_kernels.kernels as ck
 import torch
 import unittest
-import math
 import random
 
 class TestUtils(unittest.TestCase):
@@ -81,4 +80,40 @@ class TestUtils(unittest.TestCase):
                 )
                 self.assertTrue(torch.isclose(x, nw_buf[:, :old_size], 1e-5, 1e-5).all())
 
+    def test_has_nan_inf(self):
+        with torch.cuda.device(2):
+            for shape in [
+                1234,
+                3213,
+                123 * 321 * 77,
+                77777,
+                16,
+                1,
+                33
+            ]:
+                out = torch.zeros(5, dtype=torch.bool, device="cuda")
+                x = torch.randn(shape, dtype=torch.half, device="cuda")
+                self.assertTrue(not ct.has_nan_inf(x, out[0]))
+                
+                pos = random.randint(0, shape - 1)
+                x[pos] = float('inf')
+                self.assertTrue(ct.has_nan_inf(x, out[1]))
+                x[pos] = 0
+
+                pos = random.randint(0, shape - 1)
+                x[pos] = float('-inf')
+                self.assertTrue(ct.has_nan_inf(x, out[2]))
+                x[pos] = 0
+
+                pos = random.randint(0, shape - 1)
+                x[pos] = float('nan')
+                self.assertTrue(ct.has_nan_inf(x, out[3]))
+                x[pos] = 0
+
+                out[4] = True
+                self.assertTrue(ct.has_nan_inf(x, out[4]))
+
+                
+
+                
         
