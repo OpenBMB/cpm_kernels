@@ -86,3 +86,17 @@ CPM_KERNEL_EXPORT void cu_has_nan_inf(
         out[0] = 1;
     }
 }
+
+// grid <batch, n // 1024>,     thread<min(1024, n)>
+CPM_KERNEL_EXPORT void cu_copy_pos_hidden(
+    int32_t batch, int32_t hidden_size, int32_t seq_len,
+    int32_t pos,
+    const half* inp,    // (batch, hidden_size, seq_len)
+    half* out           // (batch, hidden_size)
+) {
+    int32_t col = blockIdx.y * blockDim.x + threadIdx.x;
+    if (col < hidden_size) {
+        out[ blockIdx.x * hidden_size + col ] =
+         inp[ blockIdx.x * hidden_size * seq_len + col * seq_len + pos ];
+    }
+}

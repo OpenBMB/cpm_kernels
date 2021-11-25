@@ -9,7 +9,8 @@ utils_kernel = Kernel(
         "cu_array_add",
         "cu_adjustify_logits",
         "cu_copy_extend_buffer",
-        "cu_has_nan_inf"
+        "cu_has_nan_inf",
+        "cu_copy_pos_hidden"
     ]
 )
 
@@ -105,6 +106,27 @@ def has_nan_inf(
     utils_kernel.cu_has_nan_inf(
         gridDim, blockDim, 0, stream, [
             ctypes.c_int32(n),
+            ctypes.c_void_p(inp),
+            ctypes.c_void_p(out)
+        ]
+    )
+
+def copy_pos_hidden(
+    batch : int, hidden_size : int, seq_len : int,
+    pos : int,
+    inp : DevicePointer,    # (batch, hidden_size, seq_len)
+    out : DevicePointer,    # (batch, hidden_size)
+    stream : CUDAStream
+):
+    threads = min(1024, round_up(hidden_size, 32))
+    gridDim = (batch, round_up(hidden_size, threads) // threads, 1)
+    blockDim = (threads, 1, 1)
+    utils_kernel.cu_copy_pos_hidden(
+        gridDim, blockDim, 0, stream, [
+            ctypes.c_int32(batch),
+            ctypes.c_int32(hidden_size),
+            ctypes.c_int32(seq_len),
+            ctypes.c_int32(pos),
             ctypes.c_void_p(inp),
             ctypes.c_void_p(out)
         ]

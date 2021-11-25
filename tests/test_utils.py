@@ -113,7 +113,27 @@ class TestUtils(unittest.TestCase):
                 out[4] = True
                 self.assertTrue(ct.has_nan_inf(x, out[4]))
 
-                
+    def test_copy_pos_hidden(self):
+        with torch.cuda.device(2):
+            for batch, hidden_size, seq_len in [
+                (3, 128, 256),
+                (16, 333, 334),
+                (1, 2341, 4567),
+                (15, 2341, 3451),
+            ]:
+                x = torch.randn(batch, hidden_size, seq_len, dtype=torch.float16, device="cuda")
+                for _ in range(128):
+                    pos = random.randint(0, seq_len - 1)
+                    pos_x = torch.empty(batch, hidden_size, dtype=torch.float16, device="cuda")
+                    ck.utils.copy_pos_hidden(
+                        batch, hidden_size, seq_len,
+                        pos,
+                        x.data_ptr(),
+                        pos_x.data_ptr(),
+                        torch.cuda.current_stream().cuda_stream
+                    )
+                    self.assertTrue(torch.isclose(x[:, :, pos], pos_x, 1e-5, 1e-5).all())
+
 
                 
         
