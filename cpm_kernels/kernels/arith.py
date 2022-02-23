@@ -33,7 +33,7 @@ def arith_global_scale(
     blockDim = (threads, 1, 1)
     arith_kernel.cu_arith_global_scale(
         gridDim, blockDim, 0, stream, [
-            ctypes.c_int32(n),
+            ctypes.c_int64(n),
             ctypes.c_void_p(inp),
             ctypes.c_float(scale),
             ctypes.c_void_p(out)
@@ -57,8 +57,8 @@ def arith_element_add(
     blockDim = (threads, 1, 1)
     arith_kernel.cu_arith_element_add(
         gridDim, blockDim, 0, stream, [
-            ctypes.c_int32(batch),
-            ctypes.c_int32(n),
+            ctypes.c_int64(batch),
+            ctypes.c_int64(n),
             ctypes.c_void_p(x),
             ctypes.c_void_p(y),
             ctypes.c_void_p(out)
@@ -82,8 +82,8 @@ def arith_element_mul(
     blockDim = (threads, 1, 1)
     arith_kernel.cu_arith_element_mul(
         gridDim, blockDim, 0, stream, [
-            ctypes.c_int32(batch),
-            ctypes.c_int32(n),
+            ctypes.c_int64(batch),
+            ctypes.c_int64(n),
             ctypes.c_void_p(x),
             ctypes.c_void_p(y),
             ctypes.c_void_p(out)
@@ -107,8 +107,8 @@ def arith_batch_add_forward(
     blockDim = (threads, 1, 1)
     arith_kernel.cu_arith_batch_add_forward(
         gridDim, blockDim, 0, stream, [
-            ctypes.c_int32(batch),
-            ctypes.c_int32(n),
+            ctypes.c_int64(batch),
+            ctypes.c_int64(n),
             ctypes.c_void_p(x),
             ctypes.c_void_p(y),
             ctypes.c_void_p(out)
@@ -125,8 +125,8 @@ def arith_batch_add_backward(
     blockDim = (32, 32, 1)
     arith_kernel.cu_arith_batch_add_backward(
         gridDim, blockDim, 0, stream, [
-            ctypes.c_int32(batch),
-            ctypes.c_int32(n),
+            ctypes.c_int64(batch),
+            ctypes.c_int64(n),
             ctypes.c_void_p(grad_out),
             ctypes.c_void_p(grad)
         ]
@@ -150,9 +150,9 @@ def arith_ln_mul_add(
     blockDim = (threads, 1, 1)
     arith_kernel.cu_arith_ln_mul_add(
         gridDim, blockDim, 0, stream, [
-            ctypes.c_int32(batch),
-            ctypes.c_int32(n),
-            ctypes.c_int32(m),
+            ctypes.c_int64(batch),
+            ctypes.c_int64(n),
+            ctypes.c_int64(m),
             ctypes.c_void_p(inp),
             ctypes.c_void_p(alpha),
             ctypes.c_void_p(beta),
@@ -177,9 +177,9 @@ def arith_ln_add(
     blockDim = (threads, 1, 1)
     arith_kernel.cu_arith_ln_add(
         gridDim, blockDim, 0, stream, [
-            ctypes.c_int32(batch),
-            ctypes.c_int32(n),
-            ctypes.c_int32(m),
+            ctypes.c_int64(batch),
+            ctypes.c_int64(n),
+            ctypes.c_int64(m),
             ctypes.c_void_p(inp),
             ctypes.c_void_p(beta),
             ctypes.c_void_p(out)
@@ -204,9 +204,9 @@ def arith_ln_mul(
     blockDim = (threads, 1, 1)
     arith_kernel.cu_arith_ln_mul(
         gridDim, blockDim, 0, stream, [
-            ctypes.c_int32(batch),
-            ctypes.c_int32(n),
-            ctypes.c_int32(m),
+            ctypes.c_int64(batch),
+            ctypes.c_int64(n),
+            ctypes.c_int64(m),
             ctypes.c_void_p(inp),
             ctypes.c_void_p(alpha),
             ctypes.c_void_p(out)
@@ -230,9 +230,9 @@ def arith_ln_div(
     blockDim = (threads, 1, 1)
     arith_kernel.cu_arith_ln_div(
         gridDim, blockDim, 0, stream, [
-            ctypes.c_int32(batch),
-            ctypes.c_int32(n),
-            ctypes.c_int32(m),
+            ctypes.c_int64(batch),
+            ctypes.c_int64(n),
+            ctypes.c_int64(m),
             ctypes.c_void_p(inp),
             ctypes.c_void_p(alpha),
             ctypes.c_void_p(out)
@@ -257,9 +257,9 @@ def arith_ln_sub_div(
     blockDim = (threads, 1, 1)
     arith_kernel.cu_arith_ln_sub_div(
         gridDim, blockDim, 0, stream, [
-            ctypes.c_int32(batch),
-            ctypes.c_int32(n),
-            ctypes.c_int32(m),
+            ctypes.c_int64(batch),
+            ctypes.c_int64(n),
+            ctypes.c_int64(m),
             ctypes.c_void_p(inp),
             ctypes.c_void_p(alpha),
             ctypes.c_void_p(beta),
@@ -279,9 +279,9 @@ def arith_ln_mul_backward(
     blockDim = (32, 32, 1)
     arith_kernel.cu_arith_ln_mul_backward(
         gridDim, blockDim, 0, stream, [
-            ctypes.c_int32(batch),
-            ctypes.c_int32(n),
-            ctypes.c_int32(m),
+            ctypes.c_int64(batch),
+            ctypes.c_int64(n),
+            ctypes.c_int64(m),
             ctypes.c_void_p(inp),
             ctypes.c_void_p(grad_out),
             ctypes.c_void_p(grad)
@@ -298,9 +298,9 @@ def arith_ln_add_backward(
     blockDim = (32, 32, 1)
     arith_kernel.cu_arith_ln_add_backward(
         gridDim, blockDim, 0, stream, [
-            ctypes.c_int32(batch),
-            ctypes.c_int32(n),
-            ctypes.c_int32(m),
+            ctypes.c_int64(batch),
+            ctypes.c_int64(n),
+            ctypes.c_int64(m),
             ctypes.c_void_p(grad_out),
             ctypes.c_void_p(grad)
         ]
@@ -321,8 +321,8 @@ def arith_batch_mul_add(
     blockDim = (threads, 1, 1)
     arith_kernel.cu_arith_batch_mul_add(
         gridDim, blockDim, 0, stream, [
-            ctypes.c_int32(batch),
-            ctypes.c_int32(n),
+            ctypes.c_int64(batch),
+            ctypes.c_int64(n),
             ctypes.c_void_p(x),
             ctypes.c_void_p(alpha),
             ctypes.c_void_p(beta),
@@ -344,8 +344,8 @@ def arith_batch_mul(
     blockDim = (threads, 1, 1)
     arith_kernel.cu_arith_batch_mul(
         gridDim, blockDim, 0, stream, [
-            ctypes.c_int32(batch),
-            ctypes.c_int32(n),
+            ctypes.c_int64(batch),
+            ctypes.c_int64(n),
             ctypes.c_void_p(x),
             ctypes.c_void_p(alpha),
             ctypes.c_void_p(out)

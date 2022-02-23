@@ -4,12 +4,12 @@
 
 // block <n // 1024>,   thread <min(n, 1024)>
 CPM_KERNEL_EXPORT void cu_arith_global_scale(
-    int32_t n,
+    int64_t n,
     const half *inp,    // (n,)
     float scale,
     half *out           // (n,)
 ) {
-    int32_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int64_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < n) {
         out[idx] = __float2half(__half2float(inp[idx]) * scale);
     }
@@ -17,13 +17,13 @@ CPM_KERNEL_EXPORT void cu_arith_global_scale(
 
 // block <batch_size，n // 1024>,  thread<min(n, 1024)>,  half n
 CPM_KERNEL_EXPORT void cu_arith_element_add (
-    int32_t batch, int32_t n,
+    int64_t batch, int64_t n,
     const half2 *x,         // (batch, n)
     const half2 *y,         // (batch, n)
     half2 *out
 ) {
-    int32_t col = threadIdx.x + blockIdx.y * blockDim.x;
-    int32_t pos = blockIdx.x * n + col;
+    int64_t col = threadIdx.x + blockIdx.y * blockDim.x;
+    int64_t pos = blockIdx.x * n + col;
     if (col < n) {
         out[pos] = __hadd2(x[pos], y[pos]);
     }
@@ -31,13 +31,13 @@ CPM_KERNEL_EXPORT void cu_arith_element_add (
 
 // block <batch_size, n // 1024>,  thread<min(n, 1024)>,  half n
 CPM_KERNEL_EXPORT void cu_arith_element_mul (
-    int32_t batch, int32_t n,
+    int64_t batch, int64_t n,
     const half2 *x,         // (batch, n)
     const half2 *y,         // (batch, n)
     half2 *out
 ) {
-    int32_t col = threadIdx.x + blockIdx.y * blockDim.x;
-    int32_t pos = blockIdx.x * n + col;
+    int64_t col = threadIdx.x + blockIdx.y * blockDim.x;
+    int64_t pos = blockIdx.x * n + col;
     if (col < n) {
         out[pos] = __hmul2(x[pos], y[pos]);
     }
@@ -45,13 +45,13 @@ CPM_KERNEL_EXPORT void cu_arith_element_mul (
 
 // block <batch_size, n // 1024>,  thread<min(n, 1024)>,   half n
 CPM_KERNEL_EXPORT void cu_arith_batch_add_forward(
-    int32_t batch, int32_t n,
+    int64_t batch, int64_t n,
     const half2 *x,         // (batch, n)
     const half2 *y,         // (n)
     half2 *out              // (batch, n)
 ) {
-    int32_t col = threadIdx.x + blockIdx.y * blockDim.x;
-    int32_t pos = blockIdx.x * n + col;
+    int64_t col = threadIdx.x + blockIdx.y * blockDim.x;
+    int64_t pos = blockIdx.x * n + col;
     if (col < n) {
         out[pos] = __hadd2(x[pos], __ldg(y + col));
     }
@@ -59,11 +59,11 @@ CPM_KERNEL_EXPORT void cu_arith_batch_add_forward(
 
 // block <n / WARP_SZ>,  thread<WARP_SZ, WARP_SZ>
 CPM_KERNEL_EXPORT void cu_arith_batch_add_backward(
-    int32_t batch, int32_t n,
+    int64_t batch, int64_t n,
     const half *grad_out,   // (batch, n)
     half *grad              // (n)
 ) {
-    int32_t col = blockIdx.x * blockDim.x + threadIdx.x;
+    int64_t col = blockIdx.x * blockDim.x + threadIdx.x;
     float sum = 0;
     for (int i = 0; i < batch; i += blockDim.y) {
         if (i + threadIdx.y < batch && col < n) {
@@ -78,13 +78,13 @@ CPM_KERNEL_EXPORT void cu_arith_batch_add_backward(
 
 // block <batch, n, m // 1024>    thread<min(m, 1024)>,  half m
 CPM_KERNEL_EXPORT void cu_arith_ln_add(
-    int32_t batch, int32_t n, int32_t m,
+    int64_t batch, int64_t n, int64_t m,
     const half2 *x,         // (batch, n, m)
     const half *beta,      // (n)
     half2 *out              // (batch, n, m)
 ) {
-    int32_t col = threadIdx.x + blockIdx.z * blockDim.x;
-    int32_t base_x_idx = (blockIdx.x * n + blockIdx.y) * m + col;
+    int64_t col = threadIdx.x + blockIdx.z * blockDim.x;
+    int64_t base_x_idx = (blockIdx.x * n + blockIdx.y) * m + col;
     half2 beta_v = __half2half2(__ldg(beta + blockIdx.y));
 
     if (col < m) {
@@ -95,14 +95,14 @@ CPM_KERNEL_EXPORT void cu_arith_ln_add(
 
 // block <batch, n, m // 1024>    thread<min(m, 1024)>,  half m
 CPM_KERNEL_EXPORT void cu_arith_ln_mul_add(
-    int32_t batch, int32_t n, int32_t m,
+    int64_t batch, int64_t n, int64_t m,
     const half2 *x,         // (batch, n, m)
     const half *alpha,     // (n) 
     const half *beta,      // (n)
     half2 *out              // (batch, n, m)
 ) {
-    int32_t col = threadIdx.x + blockIdx.z * blockDim.x;
-    int32_t base_x_idx = (blockIdx.x * n + blockIdx.y) * m + col;
+    int64_t col = threadIdx.x + blockIdx.z * blockDim.x;
+    int64_t base_x_idx = (blockIdx.x * n + blockIdx.y) * m + col;
     half2 alpha_v = __half2half2(__ldg(alpha + blockIdx.y));
     half2 beta_v = __half2half2(__ldg(beta + blockIdx.y));
 
@@ -113,13 +113,13 @@ CPM_KERNEL_EXPORT void cu_arith_ln_mul_add(
 
 // block <batch, n, m // 1024>    thread<min(m, 1024)>,    half m
 CPM_KERNEL_EXPORT void cu_arith_ln_mul(
-    int32_t batch, int32_t n, int32_t m,
+    int64_t batch, int64_t n, int64_t m,
     const half2 *x,         // (batch, n, m)
     const half *alpha,      // (n)
     half2 *out
 ) {
-    int32_t col = threadIdx.x + blockIdx.z * blockDim.x;
-    int32_t base_x_idx = (blockIdx.x * n + blockIdx.y) * m + col;
+    int64_t col = threadIdx.x + blockIdx.z * blockDim.x;
+    int64_t base_x_idx = (blockIdx.x * n + blockIdx.y) * m + col;
     half2 alpha_v = __half2half2(__ldg(alpha + blockIdx.y));
     if (col < m) {
         out[base_x_idx] =  __hmul2(x[base_x_idx], alpha_v);
@@ -129,13 +129,13 @@ CPM_KERNEL_EXPORT void cu_arith_ln_mul(
 
 // block <batch, n, m // 1024>    thread<min(m, 1024)>,   half m
 CPM_KERNEL_EXPORT void cu_arith_ln_div(
-    int32_t batch, int32_t n, int32_t m,
+    int64_t batch, int64_t n, int64_t m,
     const half2 *x,         // (batch, n, m)
     const half *alpha,      // (n)
     half2 *out
 ) {
-    int32_t col = threadIdx.x + blockIdx.z * blockDim.x;
-    int32_t base_x_idx = (blockIdx.x * n + blockIdx.y) * m + col;
+    int64_t col = threadIdx.x + blockIdx.z * blockDim.x;
+    int64_t base_x_idx = (blockIdx.x * n + blockIdx.y) * m + col;
     half2 alpha_v = __half2half2(__hdiv(__float2half(1.0), __ldg(alpha + blockIdx.y)));
     if (col < m) {
         out[base_x_idx] = __hmul2(x[base_x_idx], alpha_v);
@@ -144,14 +144,14 @@ CPM_KERNEL_EXPORT void cu_arith_ln_div(
 
 // block <batch, n, m // 1024>    thread<min(m, 1024)>,    half m
 CPM_KERNEL_EXPORT void cu_arith_ln_sub_div(
-    int32_t batch, int32_t n, int32_t m,
+    int64_t batch, int64_t n, int64_t m,
     const half2 *x,         // (batch, n, m)
     const half *alpha,      // (n)
     const half *beta,       // (n)
     half2* out
 ) {
-    int32_t col = threadIdx.x + blockIdx.z * blockDim.x;
-    int32_t base_x_idx = (blockIdx.x * n + blockIdx.y) * m + col;
+    int64_t col = threadIdx.x + blockIdx.z * blockDim.x;
+    int64_t base_x_idx = (blockIdx.x * n + blockIdx.y) * m + col;
     float rev_alpha = 1.0 / (float)(__ldg(alpha + blockIdx.y));
     float neg_beta = - (float)(__ldg(beta + blockIdx.y)) * rev_alpha;
     
@@ -215,7 +215,7 @@ CPM_KERNEL_EXPORT void cu_arith_ln_mul_backward(
 
 // block <n>    thread<32, 32>
 CPM_KERNEL_EXPORT void cu_arith_ln_add_backward(
-    int32_t batch, int32_t n, int32_t m,
+    int64_t batch, int64_t n, int64_t m,
     const half *grad_out,       // (batch, n, m)
     half *grad                  // (n)
 ) {
@@ -262,13 +262,13 @@ CPM_KERNEL_EXPORT void cu_arith_ln_add_backward(
 
 // block <batch, n // 1024>    thread<min(n, 1024)>,  half n
 CPM_KERNEL_EXPORT void cu_arith_batch_mul_add(
-    int32_t batch, int32_t n,
+    int64_t batch, int64_t n,
     const half2 *x,         // (batch, n)
     const half2 *alpha,     // (n) 
     const half2 *beta,      // (n)
     half2 *out              // (batch, n)
 ) {
-    int32_t col = threadIdx.x + blockIdx.y * blockDim.x;
+    int64_t col = threadIdx.x + blockIdx.y * blockDim.x;
     if (col < n) {
         out[blockIdx.x * n + col] = __hfma2(x[blockIdx.x * n + col], __ldg(alpha + col), __ldg(beta + col));
     }
@@ -276,12 +276,12 @@ CPM_KERNEL_EXPORT void cu_arith_batch_mul_add(
 
 // block <batch>    thread<min(n, 1024)>,  half n
 CPM_KERNEL_EXPORT void cu_arith_batch_mul(
-    int32_t batch, int32_t n,
+    int64_t batch, int64_t n,
     const half2 *x,         // (batch, n)
     const half2 *alpha,     // (n) 
     half2 *out              // (batch, n)
 ) {
-    int32_t col = threadIdx.x + blockIdx.y * blockDim.x;
+    int64_t col = threadIdx.x + blockIdx.y * blockDim.x;
     if (col < n) {
         out[blockIdx.x * n + col] = __hmul2(x[blockIdx.x * n + col], __ldg(alpha + col));
     }
