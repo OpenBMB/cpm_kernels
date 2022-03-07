@@ -18,12 +18,15 @@ class OpEmbedding(torch.autograd.Function):
         assert weight.ndim == 2
         assert ids.dtype == torch.int32
         assert weight.dtype == torch.half
+        if not ids.is_contiguous():
+            ids = ids.contiguous()
+        assert weight.is_contiguous()
 
         ctx.save_for_backward(ids, weight)
 
         out = torch.empty((ids.size(0), weight.size(1), ids.size(1)), device=ids.device, dtype=torch.half)
+        assert out.is_contiguous()
 
-        assert ids.is_contiguous() and weight.is_contiguous() and out.is_contiguous()
         embedding_forward(ids.size(0), weight.size(1), ids.size(1), ids.data_ptr(), weight.data_ptr(), out.data_ptr(), torch.cuda.current_stream().cuda_stream)
         return out
     
@@ -35,7 +38,8 @@ class OpEmbedding(torch.autograd.Function):
         assert grad_output.device == ids.device
         assert m == ids.size(1)
         assert n == weight.size(1)
-        assert grad_output.is_contiguous()
+        if not grad_output.is_contiguous():
+            grad_output = grad_output.contiguous()
 
         sort_result = ids.view(-1).sort()
         indices = sort_result.indices.to(torch.int32)
