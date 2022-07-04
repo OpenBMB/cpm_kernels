@@ -396,7 +396,6 @@ if MALLOC_AYNC_SUPPORT:
     @cuda.bind("cudaFreeAsync", [ctypes.c_void_p, cudaStream_t], cudaError_t)
     def cudaFreeAsync(ptr : ctypes.c_void_p, stream : cudaStream_t) -> None:
         checkCUDAStatus(cuda.cudaFreeAsync(ptr, stream))
-        return ptr
 
 @cuda.bind("cudaMallocHost", [ctypes.POINTER(ctypes.c_void_p), ctypes.c_size_t], cudaError_t)
 def cudaMallocHost(size : int) -> ctypes.c_void_p:
