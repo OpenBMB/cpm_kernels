@@ -11,7 +11,8 @@ LibCall = TypeVar("LibCall")
 def lookup_dll(prefix):
     paths = os.environ.get("PATH", "").split(os.pathsep)
     for path in paths:
-        if not os.path.exists(path):
+        # if not dir, then ignore. or os.listdir(path) will raise error.
+        if not os.path.exists(path) or not os.path.isdir(path):
             continue
         for name in os.listdir(path):
             if name.startswith(prefix) and name.lower().endswith(".dll"):
