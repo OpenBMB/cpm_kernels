@@ -31,6 +31,20 @@ def unix_find_lib(name):
         if os.path.exists(lib_name):
             return lib_name
 
+    try:
+        import nvidia
+    except ImportError:
+        nvidia = None
+    if nvidia is not None:
+        import glob
+        root_dir = os.path.dirname(nvidia.__file__)
+        file_path_pattern = os.path.join(root_dir, '**', '*.so*')
+        lib_name = 'lib%s.so' % name
+        for file_path in glob.glob(file_path_pattern, recursive=True):
+            file_name = os.path.basename(file_path)
+            if file_name.startswith(lib_name):
+                return file_path
+
     lib_name = ctypes.util.find_library(name)
     return lib_name
 
